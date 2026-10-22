@@ -1,0 +1,57 @@
+# ---------------------------------------------------------------------------
+# Servicios del proyecto: base de datos, API y los volúmenes que hacen
+# persistentes tanto la base de datos como los archivos que suben los usuarios.
+#
+# Formas de uso:
+#   docker compose up -d              -> levanta la base de datos y la API
+#   docker compose up -d mysql        -> levanta solo la base de datos, para
+#                                        trabajar la API con "dotnet run"
+# ---------------------------------------------------------------------------
+
+services:
+  # Base de datos MySQL. Su contenido se guarda en el volumen "db_data".
+  mysql:
+    image: mysql:8.4
+    container_name: proyectom-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ProyectoM}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      # Volumen nombrado: los datos sobreviven a "docker compose down" y a recrear el contenedor.
+      - db_data:/var/lib/mysql
+    healthcheck:
+      # La API espera a que la base responda antes de arrancar.
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # API del repositorio. Se construye con el Dockerfile de la raíz del proyecto.
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: proyectom-api
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # En desarrollo la API expone la interfaz de prueba de la API (Scalar).
+      ASPNETCORE_ENVIRONMENT: Development
+      # Dentro de la red de Docker la base de datos se llama "mysql" y no "localhost".
+      # El nombre de la variable es "Sección__Clave" y debe coincidir con appsettings.json.
+      ConnectionStrings__ConexionPrincipal: "Server=mysql;Port=3306;Database=${MYSQL_DATABASE:-ProyectoM};Uid=root;Pwd=${MYSQL_ROOT_PASSWORD:-password};"
+      # Los archivos subidos se guardan en la ruta montada por el volumen "files_data".
+      Almacenamiento__RutaRaiz: /app/storage
+    ports:
+      - "${API_PORT:-5239}:8080"
+    volumes:
+      - files_data:/app/storage
+
+volumes:
+  db_data:
+  files_data:
