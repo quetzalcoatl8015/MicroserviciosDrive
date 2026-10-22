@@ -1,79 +1,129 @@
-using Microsoft.EntityFrameworkCore;
-using Proyecto.Models;
-using Scalar.AspNetCore;
-using Microsoft.IdentityModel.Tokens;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using System.Text;
 using System.Security.Claims;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Proyecto.Models;
+using Proyecto.Services;
+using Scalar.AspNetCore;
 
-var builder = WebApplication.CreateBuilder(args);
+// Punto de entrada de la API. Aquí se registran los servicios y se arma la tubería
+// (middleware) por la que pasan todas las peticiones. Todo el archivo está en español
+// igual que el resto del backend.
+var constructor = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
-builder.Services.AddControllers();
+// ---------------------------------------------------------------------------
+// Servicios de la aplicación
+// ---------------------------------------------------------------------------
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-builder.Services.AddDbContext<ProyectoContext>(options => options.UseMySQL(connectionString));
+// Documentación OpenAPI y su interfaz gráfica de prueba (Scalar), solo en desarrollo.
+constructor.Services.AddOpenApi();
+constructor.Services.AddControllers();
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+// Base de datos MySQL a través de EF Core. La cadena de conexión se lee de la configuración
+// con la clave "ConnectionStrings:ConexionPrincipal". Si no existe, se aborta el arranque con
+// un mensaje claro en lugar de dejar que más adelante falle con un valor nulo.
+var cadenaConexion = constructor.Configuration.GetConnectionString("ConexionPrincipal")
+    ?? throw new InvalidOperationException("Falta la cadena de conexión 'ConexionPrincipal' en la configuración.");
+constructor.Services.AddDbContext<ContextoProyecto>(opciones => opciones.UseMySQL(cadenaConexion));
+
+// Servicio que firma los JWT (tokens de acceso y de refresco).
+constructor.Services.AddSingleton<ServicioJwt>();
+
+// Almacenamiento físico de los archivos subidos. Se registra como singleton porque solo
+// resuelve la ruta raíz una vez y no mantiene estado por petición.
+constructor.Services.AddSingleton<ServicioAlmacenamiento>();
+
+// ---------------------------------------------------------------------------
+// Autenticación con JWT
+// ---------------------------------------------------------------------------
+constructor.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(opciones =>
     {
-        options.TokenValidationParameters = new TokenValidationParameters
+        opciones.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
-            ValidAudience = builder.Configuration["JwtSettings:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:SecretKey"]!)),
+            ValidIssuer = constructor.Configuration["ConfiguracionJwt:Emisor"],
+            ValidAudience = constructor.Configuration["ConfiguracionJwt:Audiencia"],
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(constructor.Configuration["ConfiguracionJwt:ClaveSecreta"]!)),
         };
 
-        options.Events = new JwtBearerEvents
+        opciones.Events = new JwtBearerEvents
         {
-            OnTokenValidated = context =>
+            OnTokenValidated = contexto =>
             {
-                var claimsPrincipal = context.Principal;
+                var identidad = contexto.Principal;
 
-                if(claimsPrincipal == null || claimsPrincipal.FindFirst("is_access")?.Value != "True")
-                    context.Fail("Invalid Token");
+                // Únicamente los tokens de acceso sirven para autenticar peticiones: un token
+                // de refresco (cuyo claim "es_acceso" es "False") se rechaza aquí.
+                if (identidad == null
+                    || identidad.FindFirst("es_acceso")?.Value != "True"
+                    || !long.TryParse(identidad.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
+                {
+                    contexto.Fail("Token inválido.");
+                    return Task.CompletedTask;
+                }
 
-               return Task.CompletedTask; 
+                // Un usuario desactivado pierde el acceso de inmediato aunque su token siga vigente.
+                var baseDatos = contexto.HttpContext.RequestServices.GetRequiredService<ContextoProyecto>();
+
+                if (!baseDatos.Usuarios.Any(u => u.Id == usuarioId && u.EstaActivo))
+                    contexto.Fail("El usuario está desactivado.");
+
+                return Task.CompletedTask;
             }
         };
     });
 
-builder.Services.AddAuthorization(options =>
+// Política de autorización para el módulo de usuarios: solo administradores.
+// El rol viaja en el claim como el texto "True"/"False".
+constructor.Services.AddAuthorization(opciones =>
 {
-    options.AddPolicy("AdminOnly", policy => policy.RequireClaim(ClaimTypes.Role, "True"));
+    opciones.AddPolicy("SoloAdmin", politica => politica.RequireClaim(ClaimTypes.Role, "True"));
 });
 
-var  allowOriginApp = "_allowOriginApp";
-builder.Services.AddCors(options =>
+// CORS: permite que el frontend (aún fuera del alcance) pueda llamar a la API desde su
+// servidor de desarrollo.
+var nombrePoliticaCors = "_permitirOrigenApp";
+constructor.Services.AddCors(opciones =>
 {
-    options.AddPolicy(name: allowOriginApp,
-        builder =>
+    opciones.AddPolicy(name: nombrePoliticaCors,
+        opcionesCors =>
         {
-            builder.WithOrigins("http://localhost:5173")
+            opcionesCors.WithOrigins("http://localhost:5173")
                 .AllowAnyMethod()
                 .AllowAnyHeader()
                 .AllowCredentials();
         });
 });
 
-var app = builder.Build();
+var aplicacion = constructor.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+// ---------------------------------------------------------------------------
+// Tubería de peticiones
+// ---------------------------------------------------------------------------
+if (aplicacion.Environment.IsDevelopment())
 {
-     app.MapOpenApi();
-    app.MapScalarApiReference();
+    aplicacion.MapOpenApi();
+    aplicacion.MapScalarApiReference();
 }
 
-app.UseCors(allowOriginApp);
-app.UseHttpsRedirection();
-app.MapControllers();
-app.UseAuthorization();
+aplicacion.UseCors(nombrePoliticaCors);
+aplicacion.UseAuthentication();
+aplicacion.UseAuthorization();
+aplicacion.MapControllers();
 
-app.Run();
+// Preparación de la base de datos antes de atender peticiones: aplica las migraciones
+// pendientes y siembra el administrador inicial la primera vez (ver SembradoBaseDatos).
+// Se abre un ámbito propio porque los servicios con ámbito (el DbContext) no se pueden
+// resolver directamente desde la raíz del contenedor.
+using (var ambito = aplicacion.Services.CreateScope())
+{
+    var contexto = ambito.ServiceProvider.GetRequiredService<ContextoProyecto>();
+    await SembradoBaseDatos.AplicarAsync(contexto, aplicacion.Configuration, aplicacion.Logger);
+}
+
+aplicacion.Run();
