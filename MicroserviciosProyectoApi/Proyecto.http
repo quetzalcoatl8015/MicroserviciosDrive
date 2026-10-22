@@ -1,6 +1,74 @@
 @Proyecto_HostAddress = http://localhost:5239
 
-GET {{Proyecto_HostAddress}}/weatherforecast/
-Accept: application/json
+### Autoregistro de un usuario (queda inactivo hasta que un administrador lo active)
+POST {{Proyecto_HostAddress}}/api/autenticacion/registro
+Content-Type: application/json
+
+{
+  "nombre": "Juan Pérez",
+  "correo": "juan@ejemplo.com",
+  "contrasena": "Contrasena1!",
+  "confirmarContrasena": "Contrasena1!",
+  "fechaNacimiento": "1995-04-12"
+}
+
+### Inicio de sesión (devuelve el par de tokens)
+# @name acceso
+POST {{Proyecto_HostAddress}}/api/autenticacion/iniciar-sesion
+Content-Type: application/json
+
+{
+  "correo": "admin@proyectom.com",
+  "contrasena": "password"
+}
+
+### Renovación de la sesión con el token de refresco
+POST {{Proyecto_HostAddress}}/api/autenticacion/renovar
+Content-Type: application/json
+
+{
+  "tokenRefresco": "{{acceso.response.body.refreshToken}}"
+}
+
+### Lista paginada de usuarios (solo administradores)
+GET {{Proyecto_HostAddress}}/api/usuarios?pagina=1&tamanoPagina=10
+Authorization: Bearer {{acceso.response.body.accessToken}}
+
+### Crear un directorio en la raíz
+POST {{Proyecto_HostAddress}}/api/directorios
+Authorization: Bearer {{acceso.response.body.accessToken}}
+Content-Type: application/json
+
+{
+  "nombre": "Documentos"
+}
+
+### Lista paginada de directorios de la raíz
+GET {{Proyecto_HostAddress}}/api/directorios?pagina=1&tamanoPagina=10
+Authorization: Bearer {{acceso.response.body.accessToken}}
+
+### Subir un archivo (multipart/form-data: parte "Archivo" y parte "DirectorioId")
+POST {{Proyecto_HostAddress}}/api/archivos
+Authorization: Bearer {{acceso.response.body.accessToken}}
+Content-Type: multipart/form-data; boundary=----Limite
+
+------Limite
+Content-Disposition: form-data; name="DirectorioId"
+
+1
+------Limite
+Content-Disposition: form-data; name="Archivo"; filename="reporte.txt"
+Content-Type: text/plain
+
+Contenido de ejemplo del archivo.
+------Limite--
+
+### Lista paginada de archivos de un directorio, con filtros por subcadena
+GET {{Proyecto_HostAddress}}/api/archivos?directorioId=1&nombre=rep&extension=.txt&pagina=1&tamanoPagina=10
+Authorization: Bearer {{acceso.response.body.accessToken}}
+
+### Descargar un archivo
+GET {{Proyecto_HostAddress}}/api/archivos/1/descargar
+Authorization: Bearer {{acceso.response.body.accessToken}}
 
 ###
