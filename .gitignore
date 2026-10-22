@@ -1,0 +1,14 @@
+# ---------------------------------------------------------------------------
+# Reglas de ignorado para la raiz del repositorio.
+#
+# Aqui solo vive lo que no debe versionarse desde la raiz. El backend y el
+# frontend ya tienen su propio .gitignore dentro de su carpeta, asi que esas
+# reglas no se repiten: Git aplica el .gitignore mas cercano al archivo.
+# ---------------------------------------------------------------------------
+
+# Historial de reportes HTML del proyecto (index.html, reporte2.html, ...).
+#
+# No se versiona: los reportes son un registro local de cambios del usuario y
+# no forman parte del entregable de codigo. Al ignorarlos, un "git add -A" o
+# "git add ." no los arrastra por accidente hacia un commit.
+backreport/
