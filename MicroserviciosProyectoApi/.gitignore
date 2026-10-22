@@ -417,3 +417,13 @@ FakesAssemblies/
 # JetBrains Rider
 
 *.sln.iml
+
+
+
+# Almacenamiento local de los archivos subidos por los usuarios.
+
+# No se versiona: son datos de ejecución, y en contenedor esta ruta se sustituye
+
+# por el volumen nombrado que declara docker-compose.
+
+storage/
