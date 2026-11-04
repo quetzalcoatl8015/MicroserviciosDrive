@@ -4,7 +4,7 @@ Sistema de gestión de archivos en la nube con autenticación de usuarios, organ
 
 ## Estado Actual del Proyecto
 
-⚠️ **Nota Importante**: El proyecto actualmente está implementado como una arquitectura monolítica, aunque las carpetas tienen el prefijo "Microservicios". Estamos en proceso de transformación a una arquitectura de microservicios real.
+**Nota importante**: El proyecto actualmente está implementado como una arquitectura monolítica, aunque las carpetas tienen el prefijo "Microservicios". Estamos en proceso de transformación a una arquitectura de microservicios real.
 
 ### Arquitectura Actual
 - **Backend**: ASP.NET Core 10.0 (API monolítica, sin interfaz gráfica)
@@ -221,7 +221,7 @@ El sistema crea automáticamente un usuario administrador al primer inicio:
 - **Contraseña**: password
 - **Estado**: Activo
 
-⚠️ **Importante**: Cambia esta contraseña en producción.
+**Importante**: Cambia esta contraseña en producción.
 
 ## Estructura del Proyecto
 
