@@ -1,0 +1,37 @@
+# ---------------------------------------------------------------------------
+# Archivos que NO se envían al construir la imagen de la API.
+#
+# El Dockerfile de la raíz hace "COPY . .", así que sin este archivo el contexto
+# de construcción incluiría las carpetas de compilación del backend, las
+# dependencias del frontend y el historial de reportes, todo innecesario para
+# publicar la API.
+# ---------------------------------------------------------------------------
+
+# Resultado de compilaciones anteriores de .NET. Ocupa mucho y se regenera
+# dentro de la imagen.
+**/bin
+**/obj
+
+# Dependencias y resultado del frontend: la API no los usa.
+MicroserviciosProyectoApp/node_modules
+MicroserviciosProyectoApp/dist
+
+# Historial de Git y configuración del editor.
+.git
+.gitignore
+.vscode
+.idea
+
+# Reportes locales del proyecto. Están ignorados en Git y no son parte del
+# entregable de código.
+backreport
+
+# Archivos de entorno locales: pueden contener secretos de la máquina de quien
+# compila. Los valores del despliegue se pasan como variables de entorno.
+.env
+.env.local
+
+# Documentación y registros.
+*.md
+logs
+*.log
