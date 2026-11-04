@@ -5,19 +5,20 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Proyecto.Models;
 using Proyecto.Services;
-using Scalar.AspNetCore;
 
 // Punto de entrada de la API. Aquí se registran los servicios y se arma la tubería
 // (middleware) por la que pasan todas las peticiones. Todo el archivo está en español
 // igual que el resto del backend.
+//
+// Esta API es una API pura: no expone ninguna interfaz gráfica. Se retiraron OpenAPI y
+// Scalar porque mostraban una página interactiva para probar los puntos de conexión, y
+// el proyecto exige que el backend no contenga interfaz de usuario de ningún tipo.
 var constructor = WebApplication.CreateBuilder(args);
 
 // ---------------------------------------------------------------------------
 // Servicios de la aplicación
 // ---------------------------------------------------------------------------
 
-// Documentación OpenAPI y su interfaz gráfica de prueba (Scalar), solo en desarrollo.
-constructor.Services.AddOpenApi();
 constructor.Services.AddControllers();
 
 // Base de datos MySQL a través de EF Core. La cadena de conexión se lee de la configuración
@@ -85,15 +86,33 @@ constructor.Services.AddAuthorization(opciones =>
     opciones.AddPolicy("SoloAdmin", politica => politica.RequireClaim(ClaimTypes.Role, "True"));
 });
 
-// CORS: permite que el frontend (aún fuera del alcance) pueda llamar a la API desde su
-// servidor de desarrollo.
+// ---------------------------------------------------------------------------
+// CORS (intercambio de recursos entre distintos orígenes)
+// ---------------------------------------------------------------------------
+// El frontend se sirve desde un origen distinto al de la API (otro puerto, y en
+// producción otra máquina), así que el navegador bloquea las llamadas salvo que la API
+// declare explícitamente qué orígenes acepta.
+//
+// Los orígenes se leen de la configuración en "Cors:OrigenesPermitidos" para no dejar la
+// dirección del frontend escrita dentro del código: en Docker se pasan como variables de
+// entorno y así el mismo binario sirve en local y en cualquier servidor.
+//
+// Si la sección no existe se usa el origen del servidor de desarrollo de Vite, que es el
+// caso de quien trabaja con "dotnet run" y "npm run dev".
+var origenesPermitidos = constructor.Configuration.GetSection("Cors:OrigenesPermitidos").Get<string[]>();
+
+if (origenesPermitidos is null || origenesPermitidos.Length == 0)
+{
+    origenesPermitidos = ["http://localhost:5173"];
+}
+
 var nombrePoliticaCors = "_permitirOrigenApp";
 constructor.Services.AddCors(opciones =>
 {
     opciones.AddPolicy(name: nombrePoliticaCors,
         opcionesCors =>
         {
-            opcionesCors.WithOrigins("http://localhost:5173")
+            opcionesCors.WithOrigins(origenesPermitidos)
                 .AllowAnyMethod()
                 .AllowAnyHeader()
                 .AllowCredentials();
@@ -105,12 +124,6 @@ var aplicacion = constructor.Build();
 // ---------------------------------------------------------------------------
 // Tubería de peticiones
 // ---------------------------------------------------------------------------
-if (aplicacion.Environment.IsDevelopment())
-{
-    aplicacion.MapOpenApi();
-    aplicacion.MapScalarApiReference();
-}
-
 aplicacion.UseCors(nombrePoliticaCors);
 aplicacion.UseAuthentication();
 aplicacion.UseAuthorization();
