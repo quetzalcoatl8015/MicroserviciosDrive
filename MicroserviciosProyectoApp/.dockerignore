@@ -1,0 +1,33 @@
+# ---------------------------------------------------------------------------
+# Archivos que NO se envían al construir la imagen del frontend.
+#
+# Construir una imagen copia el contexto completo al demonio de Docker antes de
+# ejecutar los pasos del Dockerfile. Sin este archivo, "node_modules" (cientos
+# de megabytes) viajaría en cada compilación y además sobreescribiría las
+# dependencias instaladas dentro de la imagen, que pueden ser de otra plataforma.
+# ---------------------------------------------------------------------------
+
+# Dependencias: se instalan dentro de la imagen con "npm ci".
+node_modules
+
+# Resultado de compilaciones anteriores: se genera dentro de la imagen.
+dist
+dist-ssr
+
+# Historial de Git: no hace falta para compilar y ocupa mucho.
+.git
+.gitignore
+
+# Configuración local y archivos de entorno: pueden contener datos de la máquina
+# de quien compila. Los valores del despliegue se pasan como argumentos.
+.env
+.env.local
+
+# Configuración del editor.
+.vscode
+.idea
+*.suo
+
+# Registros y archivos temporales.
+logs
+*.log
