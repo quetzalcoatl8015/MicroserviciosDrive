@@ -121,7 +121,7 @@ public class ControladorArchivos : ControllerBase
     /// <param name="directorioId">Directorio que se está consultando. Es obligatorio: la consulta se hace por directorio.</param>
     /// <param name="nombre">Subcadena del nombre del archivo</param>
     /// <param name="extension">Subcadena de la extensión, es decir, el tipo de archivo</param>
-    /// <param name="propietarioId">Identificador del usuario que subió el archivo</param>
+    /// <param name="propietario">Subcadena del nombre del usuario que subió el archivo</param>
     /// <param name="subidoDesde">Fecha inicial de subida (inclusive)</param>
     /// <param name="subidoHasta">Fecha final de subida (inclusive)</param>
     /// <param name="pagina">Número de página (inicia en 1)</param>
@@ -131,7 +131,7 @@ public class ControladorArchivos : ControllerBase
         [FromQuery] long directorioId,
         string? nombre,
         string? extension,
-        long? propietarioId,
+        string? propietario,
         DateOnly? subidoDesde,
         DateOnly? subidoHasta,
         int pagina = 1,
@@ -153,8 +153,13 @@ public class ControladorArchivos : ControllerBase
         if (!string.IsNullOrWhiteSpace(extension))
             consulta = consulta.Where(a => a.Extension.Contains(extension));
 
-        if (propietarioId.HasValue)
-            consulta = consulta.Where(a => a.PropietarioId == propietarioId.Value);
+        // El filtro es por el NOMBRE del propietario, no por su identificador. Buscar por
+        // número era inusable: a escala nadie recuerda a qué usuario corresponde cada id.
+        // El nombre se consulta en la tabla relacionada Usuarios, que ya estaba unida para
+        // mostrar la columna Propietario, así que no cuesta una consulta extra. El PDF (3.5)
+        // solo pide filtrar "por propietario": no obliga a que sea por id.
+        if (!string.IsNullOrWhiteSpace(propietario))
+            consulta = consulta.Where(a => a.Propietario.Nombre.Contains(propietario));
 
         // El rango de fechas se convierte a instantes completos antes de enviarlo a la base de
         // datos: así se evita traducir DateTime.Date, que no todos los proveedores soportan.
