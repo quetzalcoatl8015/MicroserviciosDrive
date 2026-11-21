@@ -19,6 +19,9 @@ public class CredencialesAcceso
 /// </summary>
 public class ModeloRegistro : IValidatableObject
 {
+    [Required]
+    public string CodigoEquipo { get; set; } = null!;
+
     [Required(ErrorMessage = "El nombre es obligatorio.")]
     public string Nombre { get; set; } = null!;
 

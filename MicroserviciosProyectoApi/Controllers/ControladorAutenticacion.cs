@@ -44,6 +44,9 @@ public class ControladorAutenticacion : ControllerBase
         if (await _contexto.Usuarios.AnyAsync(u => u.Correo == modelo.Correo))
             return Conflict("Ya existe un usuario registrado con ese correo.");
 
+        var equipo = await _contexto.Equipos.FirstOrDefaultAsync(e => e.CodigoRegistro == modelo.CodigoEquipo);
+        if (equipo is null) return BadRequest("Código de equipo inválido.");
+
         var usuario = new Usuario
         {
             Nombre = modelo.Nombre,
@@ -51,6 +54,8 @@ public class ControladorAutenticacion : ControllerBase
             Contrasena = BCrypt.Net.BCrypt.HashPassword(modelo.Contrasena),
             FechaNacimiento = modelo.FechaNacimiento!.Value,
             EsAdmin = false,
+            NivelAdmin = 0,
+            EquipoId = equipo.Id,
             EstaActivo = false,
         };
 
@@ -108,6 +113,15 @@ public class ControladorAutenticacion : ControllerBase
             return Unauthorized("El token de refresco no es válido.");
 
         return Ok(await EmitirTokensAsync(guardado.Usuario));
+    }
+
+    [Authorize]
+    [HttpGet("yo")]
+    public async Task<IActionResult> Yo()
+    {
+        var usuario = (Usuario)HttpContext.Items["UsuarioActual"]!;
+        var equipo = await _contexto.Equipos.Where(e => e.Id == usuario.EquipoId).Select(e => e.Nombre).SingleAsync();
+        return Ok(new { usuario.Id, usuario.Nombre, usuario.Correo, usuario.EsAdmin, usuario.NivelAdmin, usuario.EquipoId, Equipo = equipo });
     }
 
     /// <summary>

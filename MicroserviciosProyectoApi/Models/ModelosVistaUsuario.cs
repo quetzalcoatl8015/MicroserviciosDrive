@@ -23,6 +23,9 @@ public class ModeloCrearUsuario : IValidatableObject
 
     /// <summary>Solo un administrador puede asignar el rol de administrador.</summary>
     public bool EsAdmin { get; set; }
+    [Range(0, 2)]
+    public int NivelAdmin { get; set; }
+    public long? EquipoId { get; set; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -50,6 +53,9 @@ public class ModeloEditarUsuario : IValidatableObject
     public DateOnly? FechaNacimiento { get; set; }
 
     public bool EsAdmin { get; set; }
+    [Range(0, 2)]
+    public int NivelAdmin { get; set; }
+    public long? EquipoId { get; set; }
 
     /// <summary>
     /// La contraseña es opcional al editar. Aquí se valida que, si se manda una, se mande
@@ -85,6 +91,10 @@ public class UsuarioListado
     public string Correo { get; set; } = null!;
     public DateOnly FechaNacimiento { get; set; }
     public bool EsAdmin { get; set; }
+    [Range(0, 2)]
+    public int NivelAdmin { get; set; }
+    public long? EquipoId { get; set; }
+    public string Equipo { get; set; } = null!;
     public bool EstaActivo { get; set; }
 
     /// <summary>Indica si el usuario tiene un token de refresco asignado (sesión abierta).</summary>

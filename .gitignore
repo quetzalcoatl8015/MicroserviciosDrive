@@ -13,15 +13,6 @@
 # "git add ." no los arrastra por accidente hacia un commit.
 backreport/
 
-# ---------------------------------------------------------------------------
-# Archivos de entorno.
-#
-# ".env" contiene las variables del despliegue y puede incluir la contrasena de
-# MySQL y la clave con la que se firman los JWT. Por eso nunca se versiona.
-#
-# ".env.example" SI se versiona: es la plantilla sin secretos que le indica a
-# quien clona el repositorio que variables existen y para que sirve cada una.
-# ---------------------------------------------------------------------------
+# Configuración local y artefactos de pruebas.
 .env
-.env.local
-!.env.example
+**/__pycache__/

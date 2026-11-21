@@ -25,6 +25,10 @@ public class Usuario
     /// <summary>true = administrador; false = usuario común.</summary>
     public bool EsAdmin { get; set; }
 
+    public int NivelAdmin { get; set; }
+    public long EquipoId { get; set; }
+    public Equipo Equipo { get; set; } = null!;
+
     /// <summary>
     /// false al autoregistrarse: un administrador debe activar la cuenta antes de
     /// que la persona pueda iniciar sesión.

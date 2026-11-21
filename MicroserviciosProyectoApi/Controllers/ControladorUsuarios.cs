@@ -1,282 +1,149 @@
 using System.Linq.Expressions;
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Proyecto.Models;
+using Proyecto.Services;
 
 namespace Proyecto.Controllers;
 
-/// <summary>
-/// Módulo de usuarios (módulo 2 del PDF). Solo accesible para administradores.
-/// </summary>
 [Route("api/usuarios")]
 [ApiController]
 [Authorize(Policy = "SoloAdmin")]
-public class ControladorUsuarios : ControllerBase
+public class ControladorUsuarios(ContextoProyecto contexto, AccesoEquipos acceso) : ControllerBase
 {
-    private const int TamanoPaginaPredeterminado = 10;
-    private const int TamanoPaginaMaximo = 100;
-
-    private readonly ContextoProyecto _contexto;
-
-    public ControladorUsuarios(ContextoProyecto contexto)
-    {
-        _contexto = contexto;
-    }
-
-    /// <summary>
-    /// Consulta la lista paginada de usuarios registrados.
-    /// </summary>
-    /// <param name="nombre">Subcadena del nombre</param>
-    /// <param name="correo">Subcadena del correo</param>
-    /// <param name="fechaNacimiento">Fecha de nacimiento exacta</param>
-    /// <param name="esAdmin">Si es administrador o no</param>
-    /// <param name="tieneTokenSesion">Si tiene token de refresco asignado o no</param>
-    /// <param name="pagina">Número de página (inicia en 1)</param>
-    /// <param name="tamanoPagina">Tamaño de página (máximo 100)</param>
     [HttpGet]
     public async Task<ActionResult<ResultadoPaginado<UsuarioListado>>> ObtenerUsuarios(
-        string? nombre,
-        string? correo,
-        DateOnly? fechaNacimiento,
-        bool? esAdmin,
-        bool? tieneTokenSesion,
-        int pagina = 1,
-        int tamanoPagina = TamanoPaginaPredeterminado)
+        string? nombre, string? correo, DateOnly? fechaNacimiento, bool? esAdmin,
+        bool? tieneTokenSesion, long? equipoId = null, int pagina = 1, int tamanoPagina = 10)
     {
-        Normalizar(ref pagina, ref tamanoPagina);
-
-        var consulta = _contexto.Usuarios.AsNoTracking();
-
-        // Los filtros de texto son por subcadena: "ju" encuentra "Juan".
-        if (!string.IsNullOrWhiteSpace(nombre))
-            consulta = consulta.Where(u => u.Nombre.Contains(nombre));
-
-        if (!string.IsNullOrWhiteSpace(correo))
-            consulta = consulta.Where(u => u.Correo.Contains(correo));
-
-        if (fechaNacimiento.HasValue)
-            consulta = consulta.Where(u => u.FechaNacimiento == fechaNacimiento.Value);
-
-        if (esAdmin.HasValue)
-            consulta = consulta.Where(u => u.EsAdmin == esAdmin.Value);
-
-        if (tieneTokenSesion.HasValue)
-            consulta = consulta.Where(u => (u.TokenSesion != null) == tieneTokenSesion.Value);
-
-        var totalRegistros = await consulta.CountAsync();
-
-        var elementos = await consulta
-            .OrderBy(u => u.Id)
-            .Skip((pagina - 1) * tamanoPagina)
-            .Take(tamanoPagina)
-            .Select(ProyeccionListado)
-            .ToListAsync();
-
+        pagina = Math.Max(1, pagina);
+        tamanoPagina = Math.Clamp(tamanoPagina, 1, 100);
+        if (equipoId.HasValue && !acceso.PuedeEquipo(equipoId.Value)) return Forbid();
+        var consulta = acceso.Usuarios.AsNoTracking();
+        if (equipoId.HasValue) consulta = consulta.Where(u => u.EquipoId == equipoId);
+        if (!string.IsNullOrWhiteSpace(nombre)) consulta = consulta.Where(u => u.Nombre.Contains(nombre));
+        if (!string.IsNullOrWhiteSpace(correo)) consulta = consulta.Where(u => u.Correo.Contains(correo));
+        if (fechaNacimiento.HasValue) consulta = consulta.Where(u => u.FechaNacimiento == fechaNacimiento);
+        if (esAdmin.HasValue) consulta = consulta.Where(u => u.EsAdmin == esAdmin);
+        if (tieneTokenSesion.HasValue) consulta = consulta.Where(u => (u.TokenSesion != null) == tieneTokenSesion);
         return Ok(new ResultadoPaginado<UsuarioListado>
         {
-            Elementos = elementos,
-            Pagina = pagina,
-            TamanoPagina = tamanoPagina,
-            TotalRegistros = totalRegistros,
+            Elementos = await consulta.OrderBy(u => u.Id).Skip((pagina - 1) * tamanoPagina)
+                .Take(tamanoPagina).Select(Proyeccion).ToListAsync(),
+            TotalRegistros = await consulta.CountAsync(), Pagina = pagina, TamanoPagina = tamanoPagina,
         });
     }
 
-    /// <summary>
-    /// Consulta un usuario por su identificador.
-    /// </summary>
-    [HttpGet("{id}")]
+    [HttpGet("{id:long}")]
     public async Task<ActionResult<UsuarioListado>> ObtenerUsuario(long id)
     {
-        var usuario = await _contexto.Usuarios
-            .AsNoTracking()
-            .Where(u => u.Id == id)
-            .Select(ProyeccionListado)
-            .FirstOrDefaultAsync();
-
+        var usuario = await acceso.Usuarios.AsNoTracking().Where(u => u.Id == id).Select(Proyeccion).FirstOrDefaultAsync();
         return usuario is null ? NotFound() : Ok(usuario);
     }
 
-    /// <summary>
-    /// Registra un nuevo usuario. Los usuarios creados por un administrador
-    /// quedan activos desde el inicio.
-    /// </summary>
     [HttpPost]
     public async Task<ActionResult<UsuarioListado>> CrearUsuario(ModeloCrearUsuario modelo)
     {
-        if (!ModelState.IsValid)
-            return ValidationProblem(ModelState);
-
-        if (await _contexto.Usuarios.AnyAsync(u => u.Correo == modelo.Correo))
-            return Conflict("Ya existe un usuario registrado con ese correo.");
-
+        var equipoId = modelo.EquipoId ?? acceso.Actual.EquipoId;
+        var nivel = Nivel(modelo.EsAdmin, modelo.NivelAdmin);
+        if (!acceso.PuedeEquipo(equipoId) || (!acceso.EsGlobal && nivel == 2)) return Forbid();
+        if (!await contexto.Equipos.AnyAsync(e => e.Id == equipoId)) return BadRequest("Equipo inválido.");
+        if (await contexto.Usuarios.AnyAsync(u => u.Correo == modelo.Correo)) return Conflict("El correo ya está registrado.");
         var usuario = new Usuario
         {
-            Nombre = modelo.Nombre,
-            Correo = modelo.Correo,
+            Nombre = modelo.Nombre, Correo = modelo.Correo,
             Contrasena = BCrypt.Net.BCrypt.HashPassword(modelo.Contrasena),
-            FechaNacimiento = modelo.FechaNacimiento!.Value,
-            EsAdmin = modelo.EsAdmin,
-            // A diferencia del autoregistro, un usuario creado por un administrador nace activo.
-            EstaActivo = true,
+            FechaNacimiento = modelo.FechaNacimiento!.Value, EquipoId = equipoId,
+            NivelAdmin = nivel, EsAdmin = nivel > 0, EstaActivo = true,
         };
-
-        _contexto.Usuarios.Add(usuario);
-        await _contexto.SaveChangesAsync();
-
-        return CreatedAtAction(nameof(ObtenerUsuario), new { id = usuario.Id }, new UsuarioListado
-        {
-            Id = usuario.Id,
-            Nombre = usuario.Nombre,
-            Correo = usuario.Correo,
-            FechaNacimiento = usuario.FechaNacimiento,
-            EsAdmin = usuario.EsAdmin,
-            EstaActivo = usuario.EstaActivo,
-            TieneTokenSesion = false,
-            CreadoEn = usuario.CreadoEn,
-            ActualizadoEn = usuario.ActualizadoEn,
-        });
+        contexto.Usuarios.Add(usuario);
+        await contexto.SaveChangesAsync();
+        return CreatedAtAction(nameof(ObtenerUsuario), new { id = usuario.Id },
+            await contexto.Usuarios.Where(u => u.Id == usuario.Id).Select(Proyeccion).SingleAsync());
     }
 
-    /// <summary>
-    /// Edita la información de un usuario. Si se cambia la contraseña,
-    /// su token de refresco queda revocado.
-    /// </summary>
-    [HttpPut("{id}")]
+    [HttpPut("{id:long}")]
     public async Task<IActionResult> EditarUsuario(long id, ModeloEditarUsuario modelo)
     {
-        if (!ModelState.IsValid)
-            return ValidationProblem(ModelState);
-
-        var usuario = await _contexto.Usuarios
-            .Include(u => u.TokenSesion)
-            .FirstOrDefaultAsync(u => u.Id == id);
-
-        if (usuario is null)
-            return NotFound();
-
-        if (await _contexto.Usuarios.AnyAsync(u => u.Correo == modelo.Correo && u.Id != id))
-            return Conflict("Ya existe un usuario registrado con ese correo.");
-
-        // Un usuario administrador no puede revocarse a sí mismo el rol de administrador.
-        if (usuario.Id == UsuarioActualId() && usuario.EsAdmin && !modelo.EsAdmin)
-            return BadRequest("No puedes revocar tu propio rol de administrador.");
-
+        var usuario = await acceso.Usuarios.Include(u => u.TokenSesion).FirstOrDefaultAsync(u => u.Id == id);
+        if (usuario is null) return NotFound();
+        var equipoId = modelo.EquipoId ?? usuario.EquipoId;
+        var nivel = Nivel(modelo.EsAdmin, modelo.NivelAdmin);
+        if (!PuedeGestionar(usuario) || !acceso.PuedeEquipo(equipoId) || (!acceso.EsGlobal && nivel == 2)) return Forbid();
+        if (id == acceso.Actual.Id && (nivel != usuario.NivelAdmin || equipoId != usuario.EquipoId))
+            return BadRequest("No puedes cambiar tu propio nivel ni equipo.");
+        if (usuario.NivelAdmin == 2 && nivel != 2 && await EsUltimoGlobal(usuario))
+            return BadRequest("Debe permanecer al menos un administrador de nivel 2 activo.");
+        if (!await contexto.Equipos.AnyAsync(e => e.Id == equipoId)) return BadRequest("Equipo inválido.");
+        if (await contexto.Usuarios.AnyAsync(u => u.Correo == modelo.Correo && u.Id != id)) return Conflict("El correo ya está registrado.");
+        var revocar = nivel != usuario.NivelAdmin || equipoId != usuario.EquipoId || !string.IsNullOrEmpty(modelo.Contrasena);
         usuario.Nombre = modelo.Nombre;
         usuario.Correo = modelo.Correo;
         usuario.FechaNacimiento = modelo.FechaNacimiento!.Value;
-        usuario.EsAdmin = modelo.EsAdmin;
+        usuario.EquipoId = equipoId;
+        usuario.NivelAdmin = nivel;
+        usuario.EsAdmin = nivel > 0;
         usuario.ActualizadoEn = DateTime.UtcNow;
-
-        if (!string.IsNullOrEmpty(modelo.Contrasena))
-        {
-            usuario.Contrasena = BCrypt.Net.BCrypt.HashPassword(modelo.Contrasena);
-
-            // Cambiar la contraseña cierra las sesiones abiertas de ese usuario.
-            if (usuario.TokenSesion is not null)
-                _contexto.TokensSesion.Remove(usuario.TokenSesion);
-        }
-
-        await _contexto.SaveChangesAsync();
-
+        if (!string.IsNullOrEmpty(modelo.Contrasena)) usuario.Contrasena = BCrypt.Net.BCrypt.HashPassword(modelo.Contrasena);
+        if (revocar && usuario.TokenSesion is not null) contexto.TokensSesion.Remove(usuario.TokenSesion);
+        await contexto.SaveChangesAsync();
         return NoContent();
     }
 
-    /// <summary>
-    /// Activa o desactiva un usuario. Al desactivarlo se revoca su token de refresco.
-    /// </summary>
-    [HttpPatch("{id}/estado")]
+    [HttpPatch("{id:long}/estado")]
     public async Task<IActionResult> CambiarEstadoUsuario(long id, ModeloCambiarEstadoUsuario modelo)
     {
-        var usuario = await _contexto.Usuarios
-            .Include(u => u.TokenSesion)
-            .FirstOrDefaultAsync(u => u.Id == id);
-
-        if (usuario is null)
-            return NotFound();
-
-        // Un usuario administrador no puede desactivarse a sí mismo.
-        if (usuario.Id == UsuarioActualId() && !modelo.EstaActivo)
-            return BadRequest("No puedes desactivar tu propio usuario.");
-
+        var usuario = await acceso.Usuarios.Include(u => u.TokenSesion).FirstOrDefaultAsync(u => u.Id == id);
+        if (usuario is null) return NotFound();
+        if (!PuedeGestionar(usuario)) return Forbid();
+        if (!modelo.EstaActivo && (id == acceso.Actual.Id || await EsUltimoGlobal(usuario)))
+            return BadRequest("No puedes desactivarte ni desactivar al último administrador global activo.");
         usuario.EstaActivo = modelo.EstaActivo;
         usuario.ActualizadoEn = DateTime.UtcNow;
-
-        if (!modelo.EstaActivo && usuario.TokenSesion is not null)
-            _contexto.TokensSesion.Remove(usuario.TokenSesion);
-
-        await _contexto.SaveChangesAsync();
-
+        if (!modelo.EstaActivo && usuario.TokenSesion is not null) contexto.TokensSesion.Remove(usuario.TokenSesion);
+        await contexto.SaveChangesAsync();
         return NoContent();
     }
 
-    /// <summary>
-    /// Revoca el token de refresco de un usuario (requerimiento 2.5).
-    /// </summary>
-    [HttpDelete("{id}/token-sesion")]
+    [HttpDelete("{id:long}/token-sesion")]
     public async Task<IActionResult> RevocarTokenSesion(long id)
     {
-        // Un usuario no puede revocarse su propio token de refresco.
-        if (id == UsuarioActualId())
-            return BadRequest("No puedes revocar tu propio token de sesión.");
-
-        var guardado = await _contexto.TokensSesion.FirstOrDefaultAsync(t => t.UsuarioId == id);
-
-        if (guardado is null)
-            return NotFound();
-
-        _contexto.TokensSesion.Remove(guardado);
-        await _contexto.SaveChangesAsync();
-
+        var usuario = await acceso.Usuarios.Include(u => u.TokenSesion).FirstOrDefaultAsync(u => u.Id == id);
+        if (usuario is null) return NotFound();
+        if (!PuedeGestionar(usuario)) return Forbid();
+        if (id == acceso.Actual.Id) return BadRequest("No puedes revocar tu propio token de sesión.");
+        if (usuario.TokenSesion is null) return NotFound();
+        contexto.TokensSesion.Remove(usuario.TokenSesion);
+        await contexto.SaveChangesAsync();
         return NoContent();
     }
 
-    /// <summary>
-    /// Elimina un usuario junto con su token de refresco.
-    /// </summary>
-    [HttpDelete("{id}")]
+    [HttpDelete("{id:long}")]
     public async Task<IActionResult> EliminarUsuario(long id)
     {
-        var usuario = await _contexto.Usuarios.FindAsync(id);
-
-        if (usuario is null)
-            return NotFound();
-
-        _contexto.Usuarios.Remove(usuario);
-        await _contexto.SaveChangesAsync();
-
+        var usuario = await acceso.Usuarios.FirstOrDefaultAsync(u => u.Id == id);
+        if (usuario is null) return NotFound();
+        if (!PuedeGestionar(usuario)) return Forbid();
+        if (id == acceso.Actual.Id || await EsUltimoGlobal(usuario)) return BadRequest("No puedes eliminarte ni eliminar al último administrador global activo.");
+        // Eliminar una cuenta no debe borrar carpetas que contienen trabajo de otros usuarios.
+        if (await contexto.Directorios.AnyAsync(d => d.PropietarioId == id) || await contexto.Archivos.AnyAsync(a => a.PropietarioId == id))
+            return Conflict("El usuario tiene contenido. Desactívalo o elimina primero su contenido.");
+        contexto.Usuarios.Remove(usuario);
+        await contexto.SaveChangesAsync();
         return NoContent();
     }
 
-    /// <summary>Ajusta la paginación a valores válidos antes de consultar.</summary>
-    private static void Normalizar(ref int pagina, ref int tamanoPagina)
+    private bool PuedeGestionar(Usuario usuario) => acceso.EsGlobal || usuario.NivelAdmin < 2;
+    private static int Nivel(bool esAdmin, int nivel) => nivel > 0 ? nivel : esAdmin ? 1 : 0;
+    private async Task<bool> EsUltimoGlobal(Usuario usuario) => usuario.EstaActivo && usuario.NivelAdmin == 2
+        && !await contexto.Usuarios.AnyAsync(u => u.Id != usuario.Id && u.EstaActivo && u.EsAdmin && u.NivelAdmin == 2);
+
+    private static readonly Expression<Func<Usuario, UsuarioListado>> Proyeccion = u => new UsuarioListado
     {
-        if (pagina < 1)
-            pagina = 1;
-
-        if (tamanoPagina < 1)
-            tamanoPagina = TamanoPaginaPredeterminado;
-
-        if (tamanoPagina > TamanoPaginaMaximo)
-            tamanoPagina = TamanoPaginaMaximo;
-    }
-
-    /// <summary>Identificador del usuario que está haciendo la petición.</summary>
-    private long UsuarioActualId() =>
-        long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : 0;
-
-    /// <summary>Proyección que nunca expone la contraseña del usuario.</summary>
-    private static readonly Expression<Func<Usuario, UsuarioListado>> ProyeccionListado = u => new UsuarioListado
-    {
-        Id = u.Id,
-        Nombre = u.Nombre,
-        Correo = u.Correo,
-        FechaNacimiento = u.FechaNacimiento,
-        EsAdmin = u.EsAdmin,
-        EstaActivo = u.EstaActivo,
-        TieneTokenSesion = u.TokenSesion != null,
-        CreadoEn = u.CreadoEn,
-        ActualizadoEn = u.ActualizadoEn,
+        Id = u.Id, Nombre = u.Nombre, Correo = u.Correo, FechaNacimiento = u.FechaNacimiento,
+        EsAdmin = u.EsAdmin, NivelAdmin = u.NivelAdmin, EquipoId = u.EquipoId, Equipo = u.Equipo.Nombre,
+        EstaActivo = u.EstaActivo, TieneTokenSesion = u.TokenSesion != null,
+        CreadoEn = u.CreadoEn, ActualizadoEn = u.ActualizadoEn,
     };
 }

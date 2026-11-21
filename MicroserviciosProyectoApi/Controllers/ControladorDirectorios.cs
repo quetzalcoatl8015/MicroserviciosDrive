@@ -27,11 +27,13 @@ public class ControladorDirectorios : ControllerBase
     private const int TamanoPaginaMaximo = 100;
 
     private readonly ContextoProyecto _contexto;
+    private readonly AccesoEquipos _acceso;
     private readonly ServicioAlmacenamiento _almacenamiento;
 
-    public ControladorDirectorios(ContextoProyecto contexto, ServicioAlmacenamiento almacenamiento)
+    public ControladorDirectorios(ContextoProyecto contexto, ServicioAlmacenamiento almacenamiento, AccesoEquipos acceso)
     {
         _contexto = contexto;
+        _acceso = acceso;
         _almacenamiento = almacenamiento;
     }
 
@@ -40,22 +42,29 @@ public class ControladorDirectorios : ControllerBase
     /// </summary>
     /// <param name="padreId">Directorio padre. Omitido o nulo devuelve los directorios de la raíz.</param>
     /// <param name="nombre">Subcadena del nombre del directorio</param>
+    /// <param name="equipoId">Equipo de la raíz. Solo nivel 2 puede elegir otro equipo.</param>
     /// <param name="pagina">Número de página (inicia en 1)</param>
     /// <param name="tamanoPagina">Tamaño de página (máximo 100)</param>
     [HttpGet]
     public async Task<ActionResult<ResultadoPaginado<DirectorioListado>>> ObtenerDirectorios(
         long? padreId,
         string? nombre,
+        long? equipoId = null,
         int pagina = 1,
         int tamanoPagina = TamanoPaginaPredeterminado)
     {
         Normalizar(ref pagina, ref tamanoPagina);
 
+        var visibles = await _acceso.DirectoriosLecturaAsync();
+        if (padreId.HasValue && !await visibles.AnyAsync(d => d.Id == padreId.Value)) return NotFound();
+        var equipo = equipoId ?? _acceso.Actual.EquipoId;
+        if (!padreId.HasValue && !_acceso.PuedeEquipo(equipo)) return Forbid();
+
         // Se filtra por nivel. La comparación con el padre se hace en dos ramas explícitas
         // para que EF genere "IS NULL" cuando se piden los directorios de la raíz.
         var consulta = padreId.HasValue
-            ? _contexto.Directorios.AsNoTracking().Where(d => d.PadreId == padreId.Value)
-            : _contexto.Directorios.AsNoTracking().Where(d => d.PadreId == null);
+            ? visibles.AsNoTracking().Where(d => d.PadreId == padreId.Value)
+            : visibles.AsNoTracking().Where(d => d.PadreId == null && d.EquipoId == equipo);
 
         // Los filtros de texto son por subcadena: "do" encuentra "Documentos".
         if (!string.IsNullOrWhiteSpace(nombre))
@@ -85,7 +94,7 @@ public class ControladorDirectorios : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<DirectorioListado>> ObtenerDirectorio(long id)
     {
-        var directorio = await _contexto.Directorios
+        var directorio = await (await _acceso.DirectoriosLecturaAsync())
             .AsNoTracking()
             .Where(d => d.Id == id)
             .Select(ProyeccionListado)
@@ -105,6 +114,17 @@ public class ControladorDirectorios : ControllerBase
             return ValidationProblem(ModelState);
 
         var nombre = modelo.Nombre.Trim();
+        var equipoId = modelo.EquipoId ?? _acceso.Actual.EquipoId;
+        if (!_acceso.PuedeEquipo(equipoId)) return Forbid();
+        if (modelo.PadreId.HasValue)
+        {
+            var padre = await _acceso.DirectoriosEscritura.FirstOrDefaultAsync(d => d.Id == modelo.PadreId);
+            if (padre is null) return NotFound();
+            if (modelo.EquipoId.HasValue && modelo.EquipoId != padre.EquipoId)
+                return BadRequest("El directorio padre pertenece a otro equipo.");
+            equipoId = padre.EquipoId;
+        }
+        if (!await _contexto.Equipos.AnyAsync(e => e.Id == equipoId)) return BadRequest("Equipo inválido.");
 
         // El padre, si se indica, debe existir: evita crear niveles colgados.
         if (modelo.PadreId.HasValue
@@ -113,12 +133,13 @@ public class ControladorDirectorios : ControllerBase
             return BadRequest("El directorio padre no existe.");
         }
 
-        if (await ExisteNombreAsync(nombre, modelo.PadreId))
+        if (await ExisteNombreAsync(nombre, modelo.PadreId, equipoId))
             return Conflict("Ya existe un directorio con ese nombre en el mismo nivel.");
 
         var directorio = new Directorio
         {
             Nombre = nombre,
+            EquipoId = equipoId,
             PadreId = modelo.PadreId,
             PropietarioId = UsuarioActualId(),
         };
@@ -129,6 +150,7 @@ public class ControladorDirectorios : ControllerBase
         return CreatedAtAction(nameof(ObtenerDirectorio), new { id = directorio.Id }, new DirectorioListado
         {
             Id = directorio.Id,
+            EquipoId = directorio.EquipoId,
             Nombre = directorio.Nombre,
             PadreId = directorio.PadreId,
             PropietarioId = directorio.PropietarioId,
@@ -150,7 +172,7 @@ public class ControladorDirectorios : ControllerBase
         if (!ModelState.IsValid)
             return ValidationProblem(ModelState);
 
-        var directorio = await _contexto.Directorios.FirstOrDefaultAsync(d => d.Id == id);
+        var directorio = await _acceso.DirectoriosEscritura.FirstOrDefaultAsync(d => d.Id == id);
 
         if (directorio is null)
             return NotFound();
@@ -161,7 +183,7 @@ public class ControladorDirectorios : ControllerBase
 
         var nombre = modelo.Nombre.Trim();
 
-        if (await ExisteNombreAsync(nombre, directorio.PadreId, directorio.Id))
+        if (await ExisteNombreAsync(nombre, directorio.PadreId, directorio.EquipoId, directorio.Id))
             return Conflict("Ya existe un directorio con ese nombre en el mismo nivel.");
 
         directorio.Nombre = nombre;
@@ -180,7 +202,7 @@ public class ControladorDirectorios : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> EliminarDirectorio(long id)
     {
-        var directorio = await _contexto.Directorios.FirstOrDefaultAsync(d => d.Id == id);
+        var directorio = await _acceso.DirectoriosEscritura.FirstOrDefaultAsync(d => d.Id == id);
 
         if (directorio is null)
             return NotFound();
@@ -261,11 +283,13 @@ public class ControladorDirectorios : ControllerBase
     /// Se consulta explícitamente porque MySQL permite varios NULL en un índice único, por lo
     /// que el índice de la base de datos no puede impedir nombres repetidos en la raíz.
     /// </summary>
-    private Task<bool> ExisteNombreAsync(string nombre, long? padreId, long? idExcluido = null)
+    private Task<bool> ExisteNombreAsync(string nombre, long? padreId, long equipoId, long? idExcluido = null)
     {
         var consulta = padreId.HasValue
             ? _contexto.Directorios.Where(d => d.Nombre == nombre && d.PadreId == padreId.Value)
             : _contexto.Directorios.Where(d => d.Nombre == nombre && d.PadreId == null);
+
+        consulta = consulta.Where(d => d.EquipoId == equipoId);
 
         // Al renombrar, el propio directorio no debe contar como duplicado.
         if (idExcluido.HasValue)
@@ -292,7 +316,7 @@ public class ControladorDirectorios : ControllerBase
         long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : 0;
 
     /// <summary>Indica si quien hace la petición es administrador (claim de rol = "True").</summary>
-    private bool EsAdmin() => User.FindFirstValue(ClaimTypes.Role) == "True";
+    private bool EsAdmin() => _acceso.EsAdmin;
 
     /// <summary>
     /// Proyección reutilizada por las consultas. Los conteos permiten al cliente saber si el
@@ -301,6 +325,7 @@ public class ControladorDirectorios : ControllerBase
     private static readonly Expression<Func<Directorio, DirectorioListado>> ProyeccionListado = d => new DirectorioListado
     {
         Id = d.Id,
+        EquipoId = d.EquipoId,
         Nombre = d.Nombre,
         PadreId = d.PadreId,
         PropietarioId = d.PropietarioId,

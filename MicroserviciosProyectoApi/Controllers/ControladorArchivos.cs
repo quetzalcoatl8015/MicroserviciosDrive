@@ -10,7 +10,7 @@ namespace Proyecto.Controllers;
 
 /// <summary>
 /// Módulo de archivos (requerimientos 3.2 a 3.6).
-/// Cualquier usuario autenticado puede consultar y descargar; subir lo puede hacer cualquiera,
+/// Los miembros consultan, descargan y suben contenido de su equipo; compartir concede lectura.
 /// pero renombrar y eliminar quedan reservados a quien subió el archivo o a un administrador.
 /// </summary>
 [Route("api/archivos")]
@@ -27,11 +27,13 @@ public class ControladorArchivos : ControllerBase
     private const int LongitudMaximaExtension = 20;
 
     private readonly ContextoProyecto _contexto;
+    private readonly AccesoEquipos _acceso;
     private readonly ServicioAlmacenamiento _almacenamiento;
 
-    public ControladorArchivos(ContextoProyecto contexto, ServicioAlmacenamiento almacenamiento)
+    public ControladorArchivos(ContextoProyecto contexto, ServicioAlmacenamiento almacenamiento, AccesoEquipos acceso)
     {
         _contexto = contexto;
+        _acceso = acceso;
         _almacenamiento = almacenamiento;
     }
 
@@ -58,7 +60,7 @@ public class ControladorArchivos : ControllerBase
             return BadRequest("Los archivos no pueden pesar más de 10 MB.");
 
         // El destino debe existir: así se garantiza que ningún archivo quede en la raíz.
-        var directorio = await _contexto.Directorios
+        var directorio = await _acceso.DirectoriosEscritura
             .FirstOrDefaultAsync(d => d.Id == modelo.DirectorioId!.Value, cancelacion);
 
         if (directorio is null)
@@ -96,11 +98,13 @@ public class ControladorArchivos : ControllerBase
         };
 
         _contexto.Archivos.Add(registro);
-        await _contexto.SaveChangesAsync(cancelacion);
+        try { await _contexto.SaveChangesAsync(cancelacion); }
+        catch { _almacenamiento.Eliminar(nombreAlmacenamiento); throw; }
 
         return CreatedAtAction(nameof(ObtenerArchivo), new { id = registro.Id }, new ArchivoListado
         {
             Id = registro.Id,
+            EquipoId = directorio.EquipoId,
             Nombre = registro.Nombre,
             Extension = registro.Extension,
             NombreCompleto = registro.Nombre + registro.Extension,
@@ -121,7 +125,7 @@ public class ControladorArchivos : ControllerBase
     /// <param name="directorioId">Directorio que se está consultando. Es obligatorio: la consulta se hace por directorio.</param>
     /// <param name="nombre">Subcadena del nombre del archivo</param>
     /// <param name="extension">Subcadena de la extensión, es decir, el tipo de archivo</param>
-    /// <param name="propietario">Subcadena del nombre del usuario que subió el archivo</param>
+    /// <param name="propietarioId">Identificador del usuario que subió el archivo</param>
     /// <param name="subidoDesde">Fecha inicial de subida (inclusive)</param>
     /// <param name="subidoHasta">Fecha final de subida (inclusive)</param>
     /// <param name="pagina">Número de página (inicia en 1)</param>
@@ -131,7 +135,7 @@ public class ControladorArchivos : ControllerBase
         [FromQuery] long directorioId,
         string? nombre,
         string? extension,
-        string? propietario,
+        long? propietarioId,
         DateOnly? subidoDesde,
         DateOnly? subidoHasta,
         int pagina = 1,
@@ -139,10 +143,10 @@ public class ControladorArchivos : ControllerBase
     {
         Normalizar(ref pagina, ref tamanoPagina);
 
-        if (!await _contexto.Directorios.AnyAsync(d => d.Id == directorioId))
+        if (!await (await _acceso.DirectoriosLecturaAsync()).AnyAsync(d => d.Id == directorioId))
             return NotFound("El directorio indicado no existe.");
 
-        var consulta = _contexto.Archivos
+        var consulta = (await _acceso.ArchivosLecturaAsync())
             .AsNoTracking()
             .Where(a => a.DirectorioId == directorioId);
 
@@ -153,13 +157,8 @@ public class ControladorArchivos : ControllerBase
         if (!string.IsNullOrWhiteSpace(extension))
             consulta = consulta.Where(a => a.Extension.Contains(extension));
 
-        // El filtro es por el NOMBRE del propietario, no por su identificador. Buscar por
-        // número era inusable: a escala nadie recuerda a qué usuario corresponde cada id.
-        // El nombre se consulta en la tabla relacionada Usuarios, que ya estaba unida para
-        // mostrar la columna Propietario, así que no cuesta una consulta extra. El PDF (3.5)
-        // solo pide filtrar "por propietario": no obliga a que sea por id.
-        if (!string.IsNullOrWhiteSpace(propietario))
-            consulta = consulta.Where(a => a.Propietario.Nombre.Contains(propietario));
+        if (propietarioId.HasValue)
+            consulta = consulta.Where(a => a.PropietarioId == propietarioId.Value);
 
         // El rango de fechas se convierte a instantes completos antes de enviarlo a la base de
         // datos: así se evita traducir DateTime.Date, que no todos los proveedores soportan.
@@ -199,7 +198,7 @@ public class ControladorArchivos : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<ArchivoListado>> ObtenerArchivo(long id)
     {
-        var archivo = await _contexto.Archivos
+        var archivo = await (await _acceso.ArchivosLecturaAsync())
             .AsNoTracking()
             .Where(a => a.Id == id)
             .Select(ProyeccionListado)
@@ -210,12 +209,12 @@ public class ControladorArchivos : ControllerBase
 
     /// <summary>
     /// Descarga el contenido de un archivo (requerimiento 3.6). Cualquier usuario autenticado
-    /// puede descargar cualquier archivo del repositorio.
+    /// puede descargar archivos de su equipo o compartidos con él.
     /// </summary>
     [HttpGet("{id}/descargar")]
     public async Task<IActionResult> DescargarArchivo(long id)
     {
-        var archivo = await _contexto.Archivos.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id);
+        var archivo = await (await _acceso.ArchivosLecturaAsync()).AsNoTracking().FirstOrDefaultAsync(a => a.Id == id);
 
         if (archivo is null)
             return NotFound();
@@ -241,7 +240,7 @@ public class ControladorArchivos : ControllerBase
         if (!ModelState.IsValid)
             return ValidationProblem(ModelState);
 
-        var archivo = await _contexto.Archivos.FirstOrDefaultAsync(a => a.Id == id);
+        var archivo = await _acceso.ArchivosEscritura.FirstOrDefaultAsync(a => a.Id == id);
 
         if (archivo is null)
             return NotFound();
@@ -266,7 +265,7 @@ public class ControladorArchivos : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> EliminarArchivo(long id)
     {
-        var archivo = await _contexto.Archivos.FirstOrDefaultAsync(a => a.Id == id);
+        var archivo = await _acceso.ArchivosEscritura.FirstOrDefaultAsync(a => a.Id == id);
 
         if (archivo is null)
             return NotFound();
@@ -303,7 +302,7 @@ public class ControladorArchivos : ControllerBase
         long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : 0;
 
     /// <summary>Indica si quien hace la petición es administrador (claim de rol = "True").</summary>
-    private bool EsAdmin() => User.FindFirstValue(ClaimTypes.Role) == "True";
+    private bool EsAdmin() => _acceso.EsAdmin;
 
     /// <summary>
     /// Proyección reutilizada por las consultas. NombreCompleto se arma en la base de datos para
@@ -312,6 +311,7 @@ public class ControladorArchivos : ControllerBase
     private static readonly Expression<Func<Archivo, ArchivoListado>> ProyeccionListado = a => new ArchivoListado
     {
         Id = a.Id,
+        EquipoId = a.Directorio.EquipoId,
         Nombre = a.Nombre,
         Extension = a.Extension,
         NombreCompleto = a.Nombre + a.Extension,

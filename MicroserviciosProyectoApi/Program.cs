@@ -5,21 +5,22 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Proyecto.Models;
 using Proyecto.Services;
+using Scalar.AspNetCore;
 
 // Punto de entrada de la API. Aquí se registran los servicios y se arma la tubería
 // (middleware) por la que pasan todas las peticiones. Todo el archivo está en español
 // igual que el resto del backend.
-//
-// Esta API es una API pura: no expone ninguna interfaz gráfica. Se retiraron OpenAPI y
-// Scalar porque mostraban una página interactiva para probar los puntos de conexión, y
-// el proyecto exige que el backend no contenga interfaz de usuario de ningún tipo.
 var constructor = WebApplication.CreateBuilder(args);
 
 // ---------------------------------------------------------------------------
 // Servicios de la aplicación
 // ---------------------------------------------------------------------------
 
+// Documentación OpenAPI y su interfaz gráfica de prueba (Scalar), solo en desarrollo.
+constructor.Services.AddOpenApi();
 constructor.Services.AddControllers();
+constructor.Services.AddHttpContextAccessor();
+constructor.Services.AddScoped<AccesoEquipos>();
 
 // Base de datos MySQL a través de EF Core. La cadena de conexión se lee de la configuración
 // con la clave "ConnectionStrings:ConexionPrincipal". Si no existe, se aborta el arranque con
@@ -54,7 +55,7 @@ constructor.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
         opciones.Events = new JwtBearerEvents
         {
-            OnTokenValidated = contexto =>
+            OnTokenValidated = async contexto =>
             {
                 var identidad = contexto.Principal;
 
@@ -65,16 +66,27 @@ constructor.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     || !long.TryParse(identidad.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
                 {
                     contexto.Fail("Token inválido.");
-                    return Task.CompletedTask;
+                    return;
                 }
 
                 // Un usuario desactivado pierde el acceso de inmediato aunque su token siga vigente.
                 var baseDatos = contexto.HttpContext.RequestServices.GetRequiredService<ContextoProyecto>();
 
-                if (!baseDatos.Usuarios.Any(u => u.Id == usuarioId && u.EstaActivo))
+                var usuario = await baseDatos.Usuarios.AsNoTracking().FirstOrDefaultAsync(u => u.Id == usuarioId && u.EstaActivo);
+                if (usuario is null)
+                {
                     contexto.Fail("El usuario está desactivado.");
+                    return;
+                }
+                // Los permisos se vuelven a leer: degradar o cambiar de equipo tiene efecto inmediato.
+                var claims = (ClaimsIdentity)identidad.Identity!;
+                foreach (var claim in claims.FindAll(ClaimTypes.Role).ToList()) claims.RemoveClaim(claim);
+                claims.AddClaim(new Claim(ClaimTypes.Role, usuario.EsAdmin.ToString()));
+                foreach (var claim in claims.FindAll("nivel_admin").ToList()) claims.RemoveClaim(claim);
+                claims.AddClaim(new Claim("nivel_admin", usuario.NivelAdmin.ToString()));
+                contexto.HttpContext.Items["UsuarioActual"] = usuario;
 
-                return Task.CompletedTask;
+                return;
             }
         };
     });
@@ -84,35 +96,18 @@ constructor.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 constructor.Services.AddAuthorization(opciones =>
 {
     opciones.AddPolicy("SoloAdmin", politica => politica.RequireClaim(ClaimTypes.Role, "True"));
+    opciones.AddPolicy("AdminGlobal", politica => politica.RequireClaim(ClaimTypes.Role, "True").RequireClaim("nivel_admin", "2"));
 });
 
-// ---------------------------------------------------------------------------
-// CORS (intercambio de recursos entre distintos orígenes)
-// ---------------------------------------------------------------------------
-// El frontend se sirve desde un origen distinto al de la API (otro puerto, y en
-// producción otra máquina), así que el navegador bloquea las llamadas salvo que la API
-// declare explícitamente qué orígenes acepta.
-//
-// Los orígenes se leen de la configuración en "Cors:OrigenesPermitidos" para no dejar la
-// dirección del frontend escrita dentro del código: en Docker se pasan como variables de
-// entorno y así el mismo binario sirve en local y en cualquier servidor.
-//
-// Si la sección no existe se usa el origen del servidor de desarrollo de Vite, que es el
-// caso de quien trabaja con "dotnet run" y "npm run dev".
-var origenesPermitidos = constructor.Configuration.GetSection("Cors:OrigenesPermitidos").Get<string[]>();
-
-if (origenesPermitidos is null || origenesPermitidos.Length == 0)
-{
-    origenesPermitidos = ["http://localhost:5173"];
-}
-
+// CORS: permite que la interfaz React pueda llamar a la API desde su
+// servidor de desarrollo.
 var nombrePoliticaCors = "_permitirOrigenApp";
 constructor.Services.AddCors(opciones =>
 {
     opciones.AddPolicy(name: nombrePoliticaCors,
         opcionesCors =>
         {
-            opcionesCors.WithOrigins(origenesPermitidos)
+            opcionesCors.WithOrigins("http://localhost:5173")
                 .AllowAnyMethod()
                 .AllowAnyHeader()
                 .AllowCredentials();
@@ -124,6 +119,12 @@ var aplicacion = constructor.Build();
 // ---------------------------------------------------------------------------
 // Tubería de peticiones
 // ---------------------------------------------------------------------------
+if (aplicacion.Environment.IsDevelopment())
+{
+    aplicacion.MapOpenApi();
+    aplicacion.MapScalarApiReference();
+}
+
 aplicacion.UseCors(nombrePoliticaCors);
 aplicacion.UseAuthentication();
 aplicacion.UseAuthorization();

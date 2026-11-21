@@ -75,6 +75,8 @@ public static class SembradoBaseDatos
             FechaNacimiento = fechaNacimiento,
             // Único usuario que nace activo y administrador: es la puerta de entrada.
             EsAdmin = true,
+            NivelAdmin = 2,
+            EquipoId = 1,
             EstaActivo = true,
         });
 

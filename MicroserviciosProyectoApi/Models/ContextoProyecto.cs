@@ -30,6 +30,9 @@ public class ContextoProyecto : DbContext
     /// <summary>Archivos subidos. Tabla "Archivos" (módulo 3.2).</summary>
     public DbSet<Archivo> Archivos => Set<Archivo>();
 
+    public DbSet<Equipo> Equipos => Set<Equipo>();
+    public DbSet<ContenidoCompartido> ContenidosCompartidos => Set<ContenidoCompartido>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Usuario>(entity =>
@@ -81,11 +84,11 @@ public class ContextoProyecto : DbContext
 
             entity.Property(d => d.Nombre).HasMaxLength(200).IsRequired();
 
-            // No puede haber dos directorios con el mismo nombre en el mismo nivel.
+            // No puede haber dos directorios con el mismo nombre en el mismo nivel y equipo.
             // Ojo: MySQL permite varios NULL en un índice único, así que este índice cubre
             // los subdirectorios y la unicidad en la raíz (PadreId nulo) se valida en el
             // controlador antes de insertar.
-            entity.HasIndex(d => new { d.PadreId, d.Nombre }).IsUnique();
+            entity.HasIndex(d => new { d.EquipoId, d.PadreId, d.Nombre }).IsUnique();
 
             // La relación del directorio consigo mismo se configura como Restrict y no como
             // Cascade porque MySQL no admite el borrado en cascada sobre una llave foránea
@@ -128,6 +131,31 @@ public class ContextoProyecto : DbContext
                 .WithMany()
                 .HasForeignKey(a => a.PropietarioId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<Equipo>(entity =>
+        {
+            entity.ToTable("Equipos");
+            entity.Property(e => e.Nombre).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.CodigoRegistro).HasMaxLength(64).IsRequired();
+            entity.HasIndex(e => e.Nombre).IsUnique();
+            entity.HasIndex(e => e.CodigoRegistro).IsUnique();
+        });
+        modelBuilder.Entity<Usuario>().HasOne(u => u.Equipo).WithMany()
+            .HasForeignKey(u => u.EquipoId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<Directorio>().HasOne(d => d.Equipo).WithMany()
+            .HasForeignKey(d => d.EquipoId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<ContenidoCompartido>(entity =>
+        {
+            entity.ToTable("ContenidosCompartidos", t => t.HasCheckConstraint(
+                "CK_Compartido_UnRecurso", "(`ArchivoId` IS NULL) <> (`DirectorioId` IS NULL)"));
+            entity.HasOne(c => c.EquipoDestino).WithMany().HasForeignKey(c => c.EquipoDestinoId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(c => c.Archivo).WithMany().HasForeignKey(c => c.ArchivoId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(c => c.Directorio).WithMany().HasForeignKey(c => c.DirectorioId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(c => new { c.EquipoDestinoId, c.ArchivoId }).IsUnique();
+            entity.HasIndex(c => new { c.EquipoDestinoId, c.DirectorioId }).IsUnique();
         });
     }
 }

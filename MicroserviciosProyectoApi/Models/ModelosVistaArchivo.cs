@@ -5,6 +5,8 @@ namespace Proyecto.Models;
 /// <summary>Cuerpo para crear un directorio (requerimiento 3.1).</summary>
 public class ModeloCrearDirectorio
 {
+    public long? EquipoId { get; set; }
+
     /// <summary>
     /// Nombre del directorio. La expresión regular impide separadores de ruta y
     /// caracteres reservados, de modo que un nombre nunca pueda escapar del almacenamiento.
@@ -44,6 +46,8 @@ public class ModeloSubirArchivo
 /// <summary>Directorio tal como lo expone la API (requerimiento 3.5).</summary>
 public class DirectorioListado
 {
+    public long EquipoId { get; set; }
+
     public long Id { get; set; }
     public string Nombre { get; set; } = null!;
     public long? PadreId { get; set; }
@@ -71,6 +75,8 @@ public class DirectorioListado
 /// <summary>Archivo tal como lo expone la API (requerimiento 3.5).</summary>
 public class ArchivoListado
 {
+    public long EquipoId { get; set; }
+
     public long Id { get; set; }
 
     /// <summary>Nombre sin extensión.</summary>

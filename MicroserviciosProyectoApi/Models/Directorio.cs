@@ -12,6 +12,8 @@ namespace Proyecto.Models;
 public class Directorio
 {
     public long Id { get; set; }
+    public long EquipoId { get; set; }
+    public Equipo Equipo { get; set; } = null!;
 
     /// <summary>Nombre del directorio, sin rutas. Su unicidad se valida por nivel (padre + nombre).</summary>
     public string Nombre { get; set; } = null!;

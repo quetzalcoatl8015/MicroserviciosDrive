@@ -1,303 +1,136 @@
-# MicroserviciosDrive - Repositorio de Archivos Compartido
+# Microservicios Drive — equipos y niveles de administración
 
-Sistema de gestión de archivos en la nube con autenticación de usuarios, organización en directorios jerárquicos y control de permisos.
+Código completo de la API ASP.NET Core 10 + Entity Framework Core/MySQL y la aplicación React. Se tomó como base `MicroserviciosDrive.zip`, la versión más completa de los tres ZIP recibidos. Los otros dos contienen versiones anteriores. No se recibió el PDF del enunciado; se mantuvieron las reglas implementadas por la API existente.
 
-## Estado Actual del Proyecto
+## Arranque con Docker
 
-**Nota importante**: El proyecto actualmente está implementado como una arquitectura monolítica, aunque las carpetas tienen el prefijo "Microservicios". Estamos en proceso de transformación a una arquitectura de microservicios real.
+Requiere Docker con Docker Compose. Desde esta carpeta:
 
-### Arquitectura Actual
-- **Backend**: ASP.NET Core 10.0 (API monolítica, sin interfaz gráfica)
-- **Frontend**: React + Vite, servido por nginx dentro de Docker
-- **Base de datos**: MySQL 8.4
-- **Orquestación**: Docker Compose
-
-> **Sobre la carpeta `Services/`**: contiene el trabajo en curso de la transición a
-> microservicios. Sus servicios están marcados con un *profile* de Docker Compose, así que
-> **no se levantan con el comando normal** y no son necesarios para usar la aplicación.
-> Para arrancarlos hay que pedirlos de forma explícita:
-> `docker compose --profile microservicios up -d`
-
-## Requisitos del Sistema
-
-### Software Necesario
-
-Para ejecutar el proyecto localmente, necesitas tener instalado:
-
-#### Opción 1: Con Docker (Recomendada)
-- **Docker Desktop** 4.0+ o Docker Engine
-- **Docker Compose** 2.0+ (incluido en Docker Desktop)
-- **Git** (para clonar el repositorio)
-
-#### Opción 2: Sin Docker (Desarrollo Local)
-- **.NET SDK** 10.0 o superior
-- **Node.js** 20.x o superior
-- **MySQL Server** 8.4 o superior
-- **Git**
-
-### Requisitos de Hardware
-- Mínimo 4 GB de RAM
-- 10 GB de espacio en disco libre
-- Procesador de 64 bits
-
-## Instalación y Configuración
-
-### 1. Clonar el Repositorio
-
-```bash
-git clone git@github.com:quetzalcoatl8015/MicroserviciosDrive.git
-cd MicroserviciosDrive
-```
-
-### 2. Configurar Variables de Entorno (Opcional)
-
-El proyecto arranca sin configuración adicional usando los valores predeterminados. Si
-necesitas cambiar algo (puertos, contraseñas), copia la plantilla:
-
-```bash
+```sh
 cp .env.example .env
+docker compose up --build -d
 ```
 
-Las variables más importantes:
+Abre **http://localhost:8081**. La API está en **http://localhost:5239/api** y, en desarrollo, la documentación de prueba en **http://localhost:5239/scalar**.
 
-```env
-# Base de datos MySQL
-MYSQL_ROOT_PASSWORD=password
-MYSQL_DATABASE=ProyectoM
-MYSQL_PORT=3306
+En una instalación NUEVA, el administrador inicial es de **nivel 2**:
 
-# API
-API_PORT=5239
-JWT_CLAVE_SECRETA=koNGJ89L4gn9w@0ifAsmf#opdZsgmx_O
-ASPNETCORE_ENVIRONMENT=Development
+- Correo: `admin@proyectom.com`
+- Contraseña: `password`
 
-# Frontend
-FRONTEND_PORT=5173
-VITE_API_URL=http://localhost:5239/api
-FRONTEND_ORIGIN=http://localhost:5173
-```
+Puedes establecer otras credenciales antes del primer arranque con `ADMIN_EMAIL` y `ADMIN_PASSWORD` en `.env`. Modifica también `MYSQL_ROOT_PASSWORD` y `JWT_SECRET` si vas a utilizar el sistema fuera de una demostración local. La configuración inicial no sobrescribe cuentas existentes.
 
-> `.env` no se versiona en Git porque contiene contraseñas y la clave con la que se firman
-> los JWT. `.env.example` sí se versiona y documenta qué hace cada variable.
+La primera compilación descarga las imágenes y dependencias. Consulta `docker compose logs api` si aún está arrancando. Los puertos se pueden cambiar con `WEB_PORT`, `API_PORT` y `MYSQL_PORT` en `.env`.
 
-> `VITE_API_URL` y `FRONTEND_ORIGIN` son la misma dirección vista desde dos lados: el
-> navegador (a dónde llama) y la API (a quién deja entrar). Si cambias el puerto del
-> frontend, cambia las dos.
+## Permisos
 
-### 3. Levantar el Proyecto con Docker
+| Acción | Usuario normal | Administrador nivel 1 | Administrador nivel 2 |
+| --- | --- | --- | --- |
+| Consultar y descargar contenido de su equipo | Sí | Sí | Sí |
+| Crear carpetas y subir archivos a su equipo | Sí | Sí | Sí |
+| Renombrar/eliminar contenido propio | Sí; carpetas solo vacías | Sí | Sí |
+| Administrar contenido de otros miembros de su equipo | No | Sí | Sí |
+| Crear, activar, editar y desactivar usuarios de su equipo | No | Sí, salvo cuentas de nivel 2 | Sí |
+| Asignar nivel 2 o cambiar un usuario a otro equipo | No | No | Sí |
+| Crear/renombrar equipos y navegar por todos ellos | No | No | Sí |
+| Compartir archivos/carpetas con otro equipo y revocar accesos | No | No | Sí |
+| Leer contenido que nivel 2 haya compartido con su equipo | Sí | Sí | Sí |
 
-Un solo comando levanta la base de datos, la API y el frontend:
+Cada usuario pertenece a un solo equipo. Los archivos pertenecen al equipo de su carpeta; la pertenencia de las carpetas es independiente del equipo actual de su creador. Cambiar de equipo a una persona **no mueve su contenido anterior** y le retira el acceso a ese contenido salvo que exista una concesión compartida.
 
-```bash
-docker compose up -d
+Los permisos se comprueban en el servidor en cada petición, incluyendo consultas por ID, descarga, renombrado, borrado, subida, usuarios y tokens de sesión. Cambios de rol, equipo o estado se reflejan en la siguiente petición, incluso con un JWT emitido anteriormente.
 
-# Para ver los logs
-docker compose logs -f
+Se mantiene la compatibilidad del campo `esAdmin`: un cliente anterior que mande `esAdmin: true` sin nivel explícito crea un administrador de nivel 1. Los clientes nuevos deben enviar `nivelAdmin: 0`, `1` o `2`, y `esAdmin` coherente con ese nivel.
 
-# Para detener todo
-docker compose down
-```
+## Cómo utilizarlo
 
-**Comandos útiles:**
+1. Inicia sesión con un administrador de nivel 2.
+2. En **Equipos**, crea los equipos necesarios.
+3. Selecciona un equipo y abre **Usuarios** para crear usuarios normales y administradores de nivel 1. El nivel 2 puede asignar cualquier nivel.
+4. Los usuarios también pueden registrarse con el **código de equipo** que muestra su administrador. El registro siempre crea una cuenta normal e inactiva: un administrador de ese equipo debe activarla.
+5. En **Archivos**, crea una carpeta y ábrela para subir archivos. Los archivos conservan el límite de 10 MB y no se admiten en la raíz.
+6. Para compartir, un administrador de nivel 2 abre el equipo de origen, pulsa **Compartir** en el archivo o carpeta y elige el equipo destino.
+7. Los destinatarios acceden desde **Compartido con este equipo**. El administrador de nivel 2 puede **Revocar** desde el mismo diálogo o desde esa lista.
 
-```bash
-# Levantar solo la base de datos (para desarrollo con "dotnet run" y "npm run dev")
+Compartir concede **lectura y descarga**, sin escritura, renombrado, eliminación ni permiso para volver a compartir. Compartir una carpeta incluye todo su subárbol y los archivos que se añadan después; no abre sus carpetas superiores ni sus hermanas. Compartir un archivo individual tampoco abre su carpeta. El recurso permanece en el equipo original y sus cambios son visibles para los destinatarios.
+
+Si existen dos concesiones que cubran un mismo recurso (por ejemplo, la carpeta y un archivo suyo), revocar una no cancela la otra. El diálogo muestra concesiones directas y avisa de que puede existir acceso heredado.
+
+No puedes cambiar tu propio equipo/nivel ni eliminar o desactivar tu propia cuenta. Una cuenta con contenido debe desactivarse o limpiar su contenido antes de eliminarla, para no borrar involuntariamente trabajo de otros usuarios dentro de sus carpetas.
+
+## Actualizar una instalación existente
+
+1. Respalda MySQL y el volumen de archivos antes de actualizar.
+2. Conserva el **mismo nombre de proyecto de Compose**, `.env` y volúmenes `db_data` y `files_data` de tu instalación. Si descomprimes en otra carpeta, usa `docker compose -p NOMBRE_ANTERIOR ...` para seguir utilizando los mismos volúmenes.
+3. Detén la versión anterior para liberar sus puertos y arranca esta versión con `docker compose up --build -d` usando ese mismo nombre de proyecto. No uses `down -v` sobre datos que quieras conservar.
+4. Al arrancar, la API aplica automáticamente la migración nueva, sin recrear las tablas originales:
+   - Crea **Equipo principal** y asigna a él todos los usuarios y carpetas existentes.
+   - Conserva IDs, contraseñas, tokens, jerarquía y nombres físicos de los archivos.
+   - Los administradores existentes conservan nivel 1; el administrador **activo con menor ID** pasa a nivel 2 para poder configurar los equipos.
+   - En una base vacía se crea el administrador inicial de nivel 2.
+5. Inicia sesión de nuevo y crea los equipos. Distribuye usuarios desde **Usuarios**. El contenido anterior permanece en Equipo principal: el nivel 2 puede compartirlo y crear las nuevas carpetas de cada equipo.
+
+Si una base anterior ya tiene usuarios pero **ningún administrador activo**, el sembrado respeta sus cuentas; tendrás que restaurar una cuenta administrativa desde tu procedimiento de recuperación antes de usar la nueva administración.
+
+Las migraciones son incrementales. No reviertas a la versión anterior después de crear equipos: el esquema antiguo no representa la separación de equipos ni sus permisos. Los archivos `tests/esquema_inicial.sql` y `tests/migracion_equipos.sql` son scripts generados por EF para la prueba de migración, **no deben ejecutarse adicionalmente cuando la API ya aplicó sus migraciones**.
+
+## Desarrollo sin contenerizar la interfaz
+
+```sh
+# Base de datos
+# Desde la raíz del proyecto:
 docker compose up -d mysql
 
-# Reconstruir las imágenes después de cambiar código
-docker compose up -d --build
-
-# Reconstruir solo el frontend (necesario al cambiar VITE_API_URL)
-docker compose build frontend
-
-# Eliminar todo (incluyendo volúmenes de datos)
-docker compose down -v
-
-# Levantar además los microservicios de la carpeta Services/
-docker compose --profile microservicios up -d
-```
-
-### 4. Acceso a los Servicios
-
-Una vez levantado el proyecto:
-
-- **Aplicación web (frontend)**: http://localhost:5173
-- **API Backend**: http://localhost:5239
-- **Base de datos MySQL**: localhost:3306
-
-El frontend es la única interfaz de la aplicación: se abre en el navegador y es lo que
-usa el usuario final. La API es una API pura, sin ninguna página para probarla, tal como
-exige el proyecto.
-
-### 5. Usuario Administrador Inicial
-
-El sistema crea automáticamente un administrador la primera vez que arranca sobre una base
-de datos vacía (aplica las migraciones y siembra la cuenta):
-
-- **Correo**: `admin@proyectom.com`
-- **Contraseña**: `password`
-
-En el módulo de usuarios se pueden crear más cuentas y activar a quienes se registren por
-su cuenta.
-
-## Desarrollo Local (Sin Docker)
-
-Si prefieres desarrollar sin Docker, levanta solo la base de datos en Docker y ejecuta las
-dos partes por separado:
-
-```bash
-docker compose up -d mysql
-```
-
-### Backend
-
-```bash
+# API; requiere SDK .NET 10:
 cd MicroserviciosProyectoApi
 dotnet restore
 dotnet run
-```
 
-La API estará disponible en: http://localhost:5239
-
-### Frontend
-
-```bash
+# En otra terminal; requiere Node 24 y npm:
 cd MicroserviciosProyectoApp
-npm install
+npm ci
 npm run dev
 ```
 
-El frontend estará disponible en: http://localhost:5173
+Abre `http://localhost:5173`. Vite reenvía `/api` a `http://localhost:5239`. Para un servidor diferente puede configurarse `VITE_API_URL` al compilar o arrancar la interfaz. En Docker, Nginx reenvía `/api` a la API por la red interna; el navegador utiliza el mismo origen de la interfaz.
 
-En este modo el frontend usa su dirección por omisión (`http://localhost:5239/api`) y la
-API acepta el origen `http://localhost:5173`, así que no hay que configurar nada.
+## Rutas añadidas
 
-### Base de Datos MySQL
+- `GET /api/autenticacion/yo`: identidad y permisos actuales.
+- `GET /api/equipos`: solo el equipo propio; nivel 2 obtiene todos. El código de registro solo se devuelve a administradores.
+- `POST /api/equipos`, `PUT /api/equipos/{id}`: crear y renombrar; solo nivel 2.
+- `GET /api/compartidos?equipoId=...`: contenido recibido por un equipo.
+- `POST /api/compartidos`: `{ "equipoDestinoId": 2, "directorioId": 10 }` o `{ "equipoDestinoId": 2, "archivoId": 15 }`; solo nivel 2.
+- `GET /api/compartidos/recurso?directorioId=10` o `?archivoId=15`: concesiones directas; solo nivel 2.
+- `DELETE /api/compartidos/{id}`: revocar; solo nivel 2.
 
-Si usas tu propia instalación de MySQL:
+Se conservan las rutas existentes de autenticación, usuarios, directorios y archivos. Las consultas de usuarios y raíces aceptan `equipoId`; el servidor verifica que el solicitante pueda elegir ese equipo.
 
-1. Crea la base de datos `ProyectoM`
-2. Configura la cadena de conexión en `MicroserviciosProyectoApi/appsettings.json`
-3. Ejecuta las migraciones:
-   ```bash
-   cd MicroserviciosProyectoApi
-   dotnet ef database update
-   ```
+## Validación
 
-## Funcionalidades Actuales
+Consulta `VALIDACION.md`. Las pruebas incluidas usan Python 3 estándar y Docker, sin paquetes Python adicionales. `integracion.py` crea datos con identificadores aleatorios: ejecútala contra una instalación desechable, no contra una base de uso cotidiano.
 
-### Módulo de Autenticación
-- Registro de usuarios (requiere activación por admin)
-- Inicio de sesión con JWT (token de acceso + token de refresco)
-- Renovación de tokens
-- Cierre de sesión
+```sh
+# Suite completa: crea una instalación desechable propia y la elimina al finalizar.
+# Requiere libres los puertos 15339, 13316 y 15173.
+./tests/ejecutar.sh
 
-### Módulo de Usuarios (Solo Administradores)
-- Listado paginado de usuarios
-- Creación de usuarios
-- Edición de usuarios
-- Activación/desactivación
-- Revocación de tokens de sesión
-- Eliminación de usuarios
+# Ejemplo con una instalación de prueba que exponga la API en el puerto 15339:
+API_URL=http://localhost:15339/api ADMIN_PASSWORD='AdminPruebas2026!' python3 tests/integracion.py
 
-### Módulo de Directorios
-- Creación de directorios (jerarquía)
-- Listado paginado por nivel
-- Renombrado (solo propietario o admin)
-- Eliminación (vacío por usuarios comunes, con contenido por admins)
+# Prueba de migración dentro del MySQL de esa instalación:
+MYSQL_CONTAINER=microservicios-equipos-pruebas-mysql-1 python3 tests/migracion.py
 
-### Módulo de Archivos
-- Subida de archivos (máximo 10 MB)
-- Descarga de archivos
-- Listado paginado por directorio con filtros
-- Renombrado (solo propietario o admin)
-- Eliminación (solo propietario o admin)
+# Compilación de la interfaz:
+cd MicroserviciosProyectoApp
+npm run build
+npm run lint
 
-## Usuario Administrador Inicial
-
-El sistema crea automáticamente un usuario administrador al primer inicio:
-
-- **Correo**: admin@proyectom.com
-- **Contraseña**: password
-- **Estado**: Activo
-
-**Importante**: Cambia esta contraseña en producción.
-
-## Estructura del Proyecto
-
-```
-MicroserviciosDrive/
-├── MicroserviciosProyectoApi/      # Backend ASP.NET Core (API pura, sin interfaz gráfica)
-│   ├── Controllers/                # Controladores de la API
-│   ├── Models/                     # Modelos de datos
-│   ├── Services/                   # Servicios (JWT, almacenamiento, sembrado)
-│   ├── Migrations/                 # Migraciones de EF Core
-│   └── Program.cs                  # Punto de entrada
-├── MicroserviciosProyectoApp/      # Frontend React
-│   ├── src/                        # Código fuente React
-│   │   ├── repositorio/            # Pantalla principal y sus ventanas
-│   │   ├── usuarios/               # Módulo de usuarios (solo administradores)
-│   │   ├── componentes/            # Piezas reutilizables
-│   │   └── utils/                  # Cliente HTTP y manejo de la sesión
-│   ├── Dockerfile                  # Imagen del frontend (compila con Vite y sirve con nginx)
-│   ├── nginx.conf                  # Configuración de nginx, incluye las rutas de React
-│   └── package.json                # Dependencias Node.js
-├── Services/                       # Microservicios en construcción (perfil aparte)
-├── docker-compose.yml              # Orquestación Docker
-├── Dockerfile                      # Imagen Docker del backend
-├── .env.example                    # Plantilla de variables de entorno
-└── README.md                       # Este archivo
+# Comprobación del modelo EF, desde la raíz, con SDK .NET 10:
+dotnet tool restore
+dotnet ef migrations has-pending-model-changes --project MicroserviciosProyectoApi
 ```
 
-## Próximos Pasos (Transformación a Microservicios)
+La suite permite cambiar los puertos con `TEST_API_PORT`, `TEST_MYSQL_PORT` y `TEST_WEB_PORT`.
 
-El proyecto se transformará a una arquitectura de microservicios real con:
-
-- **Servicio de Autenticación**: Gestión de tokens y sesiones
-- **Servicio de Usuarios**: Gestión de cuentas y permisos
-- **Servicio de Archivos**: Almacenamiento y gestión de archivos
-- **Servicio de Directorios**: Gestión de la jerarquía de carpetas
-- **API Gateway**: Punto de entrada único
-- **Service Discovery**: Descubrimiento de servicios
-- **Message Broker**: Comunicación asíncrona entre servicios
-
-Estos servicios ya existen en la carpeta `Services/` y están en construcción. Se levantan
-con `docker compose --profile microservicios up -d`, aparte del arranque normal.
-
-## Solución de Problemas
-
-### El contenedor MySQL no inicia
-- Verifica que el puerto 3306 no esté en uso
-- Revisa los logs: `docker compose logs mysql`
-
-### La aplicación web no abre
-- Revisa los logs: `docker compose logs frontend`
-- Comprueba que el contenedor esté arriba: `docker compose ps`
-- Si cambiaste `FRONTEND_PORT`, abre la nueva dirección **y** actualiza
-  `FRONTEND_ORIGIN` en el `.env`, porque la API solo acepta peticiones de ese origen
-
-### La aplicación abre pero las peticiones fallan
-- Casi siempre es CORS: `FRONTEND_ORIGIN` debe coincidir exactamente con la dirección
-  desde la que se abre el frontend (protocolo, nombre y puerto, sin barra final)
-- Revisa la consola del navegador; el mensaje de error lo indica
-
-### La API no conecta a la base de datos
-- Asegúrate de que el contenedor MySQL esté saludable: `docker compose ps`
-- Verifica la cadena de conexión en `docker-compose.yml`
-
-### Error de permisos al subir archivos
-- Verifica que el volumen `files_data` tenga los permisos correctos
-- En Linux/Mac, ajusta los permisos del directorio de almacenamiento
-
-### Cambié código y el contenedor sigue igual
-- Las imágenes no se reconstruyen solas. Usa `docker compose up -d --build`
-- En el frontend, si cambiaste `VITE_API_URL`, hace falta `docker compose build frontend`:
-  la dirección se escribe dentro del JavaScript al compilar, no se lee al arrancar
-
-## Soporte
-
-Para reportar problemas o sugerencias, abre un issue en el repositorio de GitHub.
-
-## Licencia
-
-Este proyecto es parte de un trabajo académico para la materia de Microservicios.
+La migración y la instantánea del modelo se generaron con EF Core y se revisó su SQL siguiendo la documentación oficial de [gestión de migraciones de Microsoft](https://learn.microsoft.com/en-us/ef/core/managing-schemas/migrations/managing).

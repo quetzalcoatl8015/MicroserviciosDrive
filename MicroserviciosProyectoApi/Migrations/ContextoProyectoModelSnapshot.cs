@@ -72,6 +72,42 @@ namespace Proyecto.Migrations
                     b.ToTable("Archivos", (string)null);
                 });
 
+            modelBuilder.Entity("Proyecto.Models.ContenidoCompartido", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("ArchivoId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreadoEn")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<long?>("DirectorioId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("EquipoDestinoId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ArchivoId");
+
+                    b.HasIndex("DirectorioId");
+
+                    b.HasIndex("EquipoDestinoId", "ArchivoId")
+                        .IsUnique();
+
+                    b.HasIndex("EquipoDestinoId", "DirectorioId")
+                        .IsUnique();
+
+                    b.ToTable("ContenidosCompartidos", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Compartido_UnRecurso", "(`ArchivoId` IS NULL) <> (`DirectorioId` IS NULL)");
+                        });
+                });
+
             modelBuilder.Entity("Proyecto.Models.Directorio", b =>
                 {
                     b.Property<long>("Id")
@@ -83,6 +119,9 @@ namespace Proyecto.Migrations
 
                     b.Property<DateTime>("CreadoEn")
                         .HasColumnType("datetime(6)");
+
+                    b.Property<long>("EquipoId")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Nombre")
                         .IsRequired()
@@ -97,12 +136,44 @@ namespace Proyecto.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("PadreId");
+
                     b.HasIndex("PropietarioId");
 
-                    b.HasIndex("PadreId", "Nombre")
+                    b.HasIndex("EquipoId", "PadreId", "Nombre")
                         .IsUnique();
 
                     b.ToTable("Directorios", (string)null);
+                });
+
+            modelBuilder.Entity("Proyecto.Models.Equipo", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("CodigoRegistro")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTime>("CreadoEn")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CodigoRegistro")
+                        .IsUnique();
+
+                    b.HasIndex("Nombre")
+                        .IsUnique();
+
+                    b.ToTable("Equipos", (string)null);
                 });
 
             modelBuilder.Entity("Proyecto.Models.TokenSesion", b =>
@@ -158,6 +229,9 @@ namespace Proyecto.Migrations
                     b.Property<DateTime>("CreadoEn")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<long>("EquipoId")
+                        .HasColumnType("bigint");
+
                     b.Property<bool>("EsAdmin")
                         .HasColumnType("tinyint(1)");
 
@@ -166,6 +240,9 @@ namespace Proyecto.Migrations
 
                     b.Property<DateTime>("FechaNacimiento")
                         .HasColumnType("date");
+
+                    b.Property<int>("NivelAdmin")
+                        .HasColumnType("int");
 
                     b.Property<string>("Nombre")
                         .IsRequired()
@@ -176,6 +253,8 @@ namespace Proyecto.Migrations
 
                     b.HasIndex("Correo")
                         .IsUnique();
+
+                    b.HasIndex("EquipoId");
 
                     b.ToTable("Usuarios", (string)null);
                 });
@@ -199,8 +278,39 @@ namespace Proyecto.Migrations
                     b.Navigation("Propietario");
                 });
 
+            modelBuilder.Entity("Proyecto.Models.ContenidoCompartido", b =>
+                {
+                    b.HasOne("Proyecto.Models.Archivo", "Archivo")
+                        .WithMany()
+                        .HasForeignKey("ArchivoId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Proyecto.Models.Directorio", "Directorio")
+                        .WithMany()
+                        .HasForeignKey("DirectorioId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Proyecto.Models.Equipo", "EquipoDestino")
+                        .WithMany()
+                        .HasForeignKey("EquipoDestinoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Archivo");
+
+                    b.Navigation("Directorio");
+
+                    b.Navigation("EquipoDestino");
+                });
+
             modelBuilder.Entity("Proyecto.Models.Directorio", b =>
                 {
+                    b.HasOne("Proyecto.Models.Equipo", "Equipo")
+                        .WithMany()
+                        .HasForeignKey("EquipoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Proyecto.Models.Directorio", "Padre")
                         .WithMany("Subdirectorios")
                         .HasForeignKey("PadreId")
@@ -211,6 +321,8 @@ namespace Proyecto.Migrations
                         .HasForeignKey("PropietarioId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Equipo");
 
                     b.Navigation("Padre");
 
@@ -226,6 +338,17 @@ namespace Proyecto.Migrations
                         .IsRequired();
 
                     b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("Proyecto.Models.Usuario", b =>
+                {
+                    b.HasOne("Proyecto.Models.Equipo", "Equipo")
+                        .WithMany()
+                        .HasForeignKey("EquipoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Equipo");
                 });
 
             modelBuilder.Entity("Proyecto.Models.Directorio", b =>
