@@ -152,11 +152,6 @@ namespace Proyecto.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bigint");
 
-                    b.Property<string>("CodigoRegistro")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
-
                     b.Property<DateTime>("CreadoEn")
                         .HasColumnType("datetime(6)");
 
@@ -166,9 +161,6 @@ namespace Proyecto.Migrations
                         .HasColumnType("varchar(100)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CodigoRegistro")
-                        .IsUnique();
 
                     b.HasIndex("Nombre")
                         .IsUnique();
@@ -229,7 +221,7 @@ namespace Proyecto.Migrations
                     b.Property<DateTime>("CreadoEn")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<long>("EquipoId")
+                    b.Property<long?>("EquipoId")
                         .HasColumnType("bigint");
 
                     b.Property<bool>("EsAdmin")
@@ -345,8 +337,7 @@ namespace Proyecto.Migrations
                     b.HasOne("Proyecto.Models.Equipo", "Equipo")
                         .WithMany()
                         .HasForeignKey("EquipoId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Equipo");
                 });

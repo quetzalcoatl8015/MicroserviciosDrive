@@ -136,9 +136,7 @@ public class ContextoProyecto : DbContext
         {
             entity.ToTable("Equipos");
             entity.Property(e => e.Nombre).HasMaxLength(100).IsRequired();
-            entity.Property(e => e.CodigoRegistro).HasMaxLength(64).IsRequired();
             entity.HasIndex(e => e.Nombre).IsUnique();
-            entity.HasIndex(e => e.CodigoRegistro).IsUnique();
         });
         modelBuilder.Entity<Usuario>().HasOne(u => u.Equipo).WithMany()
             .HasForeignKey(u => u.EquipoId).OnDelete(DeleteBehavior.Restrict);
