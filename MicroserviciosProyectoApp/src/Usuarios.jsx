@@ -42,19 +42,19 @@ export default function Usuarios({ usuario, equipoId, equipos, informar }) {
   return <section>
     <div className="d-flex gap-3 justify-content-between align-items-center mb-3"><h1 className="h4">Usuarios del equipo</h1><button className="btn btn-primary" onClick={() => { setErrorFormulario(''); setEditar({ equipoId, nivelAdmin: 0 }); }}>Crear usuario</button></div>
     <label className="mb-3">Buscar por nombre<input className="form-control" value={buscar} onChange={e => { setBuscar(e.target.value); setPagina(1); }} /></label>
-    <div className="table-responsive"><table className="table align-middle"><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+    <div className="table-responsive"><table className="table align-middle"><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Equipo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
       {usuarios.map(u => {
         const gestionable = usuario.nivelAdmin === 2 || u.nivelAdmin < 2;
-        return <tr key={u.id}><td>{u.nombre}</td><td>{u.correo}</td><td>{u.nivelAdmin ? `Administrador nivel ${u.nivelAdmin}` : 'Usuario'}</td><td>{u.estaActivo ? 'Activo' : 'Pendiente / inactivo'}</td><td><div className="d-flex flex-wrap gap-1">
+        return <tr key={u.id}><td>{u.nombre}</td><td>{u.correo}</td><td>{u.nivelAdmin ? `Administrador nivel ${u.nivelAdmin}` : 'Usuario'}</td><td>{u.equipo || 'Sin equipo'}</td><td>{u.estaActivo ? 'Activo' : 'Pendiente / inactivo'}</td><td><div className="d-flex flex-wrap gap-1">
           <button className="btn btn-sm btn-outline-primary" disabled={!gestionable || ocupado} onClick={() => { setErrorFormulario(''); setEditar(u); }}>Editar</button>
-          <button className="btn btn-sm btn-outline-secondary" disabled={!gestionable || ocupado || u.id === usuario.id} onClick={() => operar(() => api.patch(`/usuarios/${u.id}/estado`, { estaActivo: !u.estaActivo }))}>{u.estaActivo ? 'Desactivar' : 'Activar'}</button>
+          <button className="btn btn-sm btn-outline-secondary" disabled={!gestionable || ocupado || u.id === usuario.id} onClick={() => operar(() => api.patch(`/usuarios/${u.id}/estado`, u.estaActivo ? { estaActivo: false } : { estaActivo: true, equipoId: u.equipoId ?? equipoId }))}>{u.estaActivo ? 'Desactivar' : 'Activar'}</button>
           <button className="btn btn-sm btn-outline-warning" disabled={!gestionable || ocupado || !u.tieneTokenSesion || u.id === usuario.id} onClick={() => operar(() => api.delete(`/usuarios/${u.id}/token-sesion`))}>Revocar refresco</button>
           <button className="btn btn-sm btn-outline-danger" disabled={!gestionable || ocupado || u.id === usuario.id} onClick={() => {
             if (window.confirm(`¿Eliminar la cuenta de ${u.nombre}?`)) operar(() => api.delete(`/usuarios/${u.id}`));
           }}>Eliminar</button>
         </div></td></tr>;
       })}
-      {!usuarios.length && <tr><td colSpan={5}>No hay usuarios que coincidan.</td></tr>}
+      {!usuarios.length && <tr><td colSpan={6}>No hay usuarios que coincidan.</td></tr>}
     </tbody></table></div>
     <div className="d-flex gap-3 align-items-center"><button className="btn btn-outline-secondary" disabled={pagina <= 1} onClick={() => setPagina(pagina - 1)}>Anterior</button><span>Página {pagina} de {paginas}</span><button className="btn btn-outline-secondary" disabled={pagina >= paginas} onClick={() => setPagina(pagina + 1)}>Siguiente</button></div>
     {editar && <Modal show onHide={() => setEditar(null)} centered><Modal.Header closeButton><Modal.Title>{editar.id ? 'Editar usuario' : 'Crear usuario'}</Modal.Title></Modal.Header><Modal.Body>

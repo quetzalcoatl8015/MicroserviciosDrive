@@ -13,7 +13,7 @@ export default function Login({ onLogin }) {
     try {
       if (registro) {
         await api.post('/autenticacion/registro', datos);
-        setAviso('Cuenta registrada. El administrador de tu equipo debe activarla.');
+        setAviso('Cuenta registrada. Un administrador debe activarla antes de que puedas ingresar.');
         setRegistro(false);
       } else {
         const { data } = await api.post('/autenticacion/iniciar-sesion', datos);
@@ -38,7 +38,7 @@ export default function Login({ onLogin }) {
       {registro && <>
         <label>Confirmar contraseña<input className="form-control" name="confirmarContrasena" type="password" required /></label>
         <label>Fecha de nacimiento<input className="form-control" name="fechaNacimiento" type="date" required /></label>
-        <label>Código de equipo<input className="form-control" name="codigoEquipo" required /><small>Pídelo al administrador de tu equipo.</small></label>
+        <small className="text-secondary">Tu cuenta quedará inactiva hasta que un administrador la active.</small>
       </>}
       <button className="btn btn-primary" disabled={ocupado}>{registro ? 'Registrarme' : 'Ingresar'}</button>
       <button className="btn btn-link" type="button" onClick={() => { setRegistro(!registro); setError(''); }}>{registro ? 'Ya tengo cuenta' : 'Crear una cuenta'}</button>

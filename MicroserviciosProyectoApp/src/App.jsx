@@ -48,7 +48,6 @@ export default function App() {
   }
   if (cargando) return <p className="container py-5">Cargando sesión…</p>;
   if (!usuario) return <Login onLogin={cargar} />;
-  const equipo = equipos.find(e => String(e.id) === equipoId);
   return <>
     <header className="navbar navbar-dark bg-dark px-4 gap-3">
       <span className="navbar-brand">Drive por equipos</span>
@@ -66,10 +65,9 @@ export default function App() {
         </nav>
       </div>
       {error && <div role="alert" className="alert alert-danger d-flex justify-content-between">{error}<button aria-label="Cerrar error" className="btn-close" onClick={() => setError('')} /></div>}
-      {usuario.esAdmin && equipo?.codigoRegistro && <p className="small text-secondary">Código para registrarse en {equipo.nombre}: <code>{equipo.codigoRegistro}</code></p>}
       {vista === 'equipos' && usuario.nivelAdmin === 2 ? <section><h1 className="h4">Administrar equipos</h1>
         <form onSubmit={crearEquipo} className="d-flex gap-2 mb-4"><input aria-label="Nombre del nuevo equipo" name="nombre" className="form-control" placeholder="Nombre del nuevo equipo" required maxLength={100} /><button className="btn btn-primary">Crear equipo</button></form>
-        {equipos.map(e => <div className="card card-body mb-2" key={e.id}><strong>{e.nombre}</strong><span>Código: {e.codigoRegistro}</span><button className="btn btn-link text-start" onClick={async () => {
+        {equipos.map(e => <div className="card card-body mb-2" key={e.id}><strong>{e.nombre}</strong><button className="btn btn-link text-start" onClick={async () => {
           const nombre = window.prompt('Nuevo nombre del equipo', e.nombre); if (!nombre?.trim()) return;
           try { await api.put(`/equipos/${e.id}`, { nombre }); setEquipos((await api.get('/equipos')).data); } catch (err) { informar(err); }
         }}>Cambiar nombre</button></div>)}
