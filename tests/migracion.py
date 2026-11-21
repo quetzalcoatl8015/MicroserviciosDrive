@@ -33,13 +33,17 @@ def main():
         INSERT INTO TokensSesion (Id, UsuarioId, Token, ExpiraEn, CreadoEn) VALUES (1, 10, REPEAT('a',64), DATE_ADD(NOW(), INTERVAL 1 DAY), NOW());
         ''')
         sql(f'USE `{BD}`;\n' + (RAIZ / 'migracion_equipos.sql').read_text(encoding='utf-8-sig'))
+        sql(f'USE `{BD}`;\n' + (RAIZ / 'migracion_sin_codigo.sql').read_text(encoding='utf-8-sig'))
         assert sql(f'USE `{BD}`; SELECT CONCAT(Id, ":", EquipoId, ":", NivelAdmin, ":", Contrasena) FROM Usuarios ORDER BY Id;') == '10:1:2:hash-intacto\n20:1:1:otro-hash\n30:1:0:tercer-hash'
         assert sql(f'USE `{BD}`; SELECT CONCAT(Id, ":", EquipoId, ":", IFNULL(PadreId,0)) FROM Directorios ORDER BY Id;') == '100:1:0\n101:1:100'
         assert sql(f'USE `{BD}`; SELECT CONCAT(Id, ":", DirectorioId, ":", NombreAlmacenamiento, ":", TamanoBytes) FROM Archivos;') == '500:101:original-inmutable.pdf:123'
         assert sql(f'USE `{BD}`; SELECT COUNT(*) FROM TokensSesion;') == '1'
-        assert sql(f'USE `{BD}`; SELECT COUNT(*) FROM Equipos WHERE Id=1 AND Nombre="Equipo principal" AND LENGTH(CodigoRegistro)=32;') == '1'
-        assert sql(f'USE `{BD}`; SELECT COUNT(*) FROM __EFMigrationsHistory;') == '2'
-        print('OK: migración conserva usuarios, contraseñas, tokens, árbol y referencias de archivos; asigna equipo 1 y niveles 0/1/2.')
+        assert sql(f'USE `{BD}`; SELECT COUNT(*) FROM Equipos WHERE Id=1 AND Nombre="Equipo principal";') == '1'
+        # El código de equipo desaparece y la pertenencia pasa a ser opcional (cuenta sin equipo).
+        assert sql(f'USE `{BD}`; SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME="Equipos" AND COLUMN_NAME="CodigoRegistro";') == '0'
+        assert sql(f'USE `{BD}`; SELECT IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME="Usuarios" AND COLUMN_NAME="EquipoId";') == 'YES'
+        assert sql(f'USE `{BD}`; SELECT COUNT(*) FROM __EFMigrationsHistory;') == '3'
+        print('OK: migración conserva usuarios, contraseñas, tokens, árbol y referencias de archivos; asigna equipo 1 y niveles 0/1/2; retira el código de equipo y deja la pertenencia opcional.')
     finally:
         # Solo se elimina la BD aleatoria creada por esta ejecución.
         sql(f'DROP DATABASE `{BD}`;')

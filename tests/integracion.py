@@ -79,7 +79,7 @@ def main():
     pedir('POST', '/equipos', {'nombre': 'Prohibido'}, tua, 403)
     pedir('GET', '/usuarios', token=tua, esperado=403)
     assert {e['id'] for e in pedir('GET', '/equipos', token=tua)} == {a}
-    assert pedir('GET', '/equipos', token=tua)[0]['codigoRegistro'] is None
+    assert 'codigoRegistro' not in pedir('GET', '/equipos', token=tua)[0]
     lista = pedir('GET', '/usuarios?tamanoPagina=100', token=ta)['elementos']
     assert all(u['equipoId'] == a for u in lista)
     pedir('GET', f'/usuarios/{ub["id"]}', token=ta, esperado=404)
@@ -180,15 +180,19 @@ def main():
     pedir('GET', '/directorios', token=tub, esperado=401)
     pedir('PATCH', f'/usuarios/{ub["id"]}/estado', {'estaActivo': True}, tb, 204)
 
+    # Autoregistro: sin equipo, inactivo y usuario común hasta que un administrador lo active.
     registro = {'nombre': 'Pendiente', 'correo': f'pendiente-{SUFIJO}@prueba.local', 'contrasena': PASSWORD,
-                'confirmarContrasena': PASSWORD, 'fechaNacimiento': '1998-02-03', 'codigoEquipo': equipos['A']['codigoRegistro'],
-                'nivelAdmin': 2, 'esAdmin': True, 'equipoId': b}
+                'confirmarContrasena': PASSWORD, 'fechaNacimiento': '1998-02-03'}
     pendiente = pedir('POST', '/autenticacion/registro', registro, esperado=201)
     info = pedir('GET', f'/usuarios/{pendiente["id"]}', token=ta)
-    assert info['equipoId'] == a and not info['esAdmin'] and info['nivelAdmin'] == 0 and not info['estaActivo']
+    assert info['equipoId'] is None and not info['esAdmin'] and info['nivelAdmin'] == 0 and not info['estaActivo']
     pedir('POST', '/autenticacion/iniciar-sesion', {'correo': registro['correo'], 'contrasena': PASSWORD}, esperado=401)
-    pedir('PATCH', f'/usuarios/{pendiente["id"]}/estado', {'estaActivo': True}, tb, 404)
-    pedir('PATCH', f'/usuarios/{pendiente["id"]}/estado', {'estaActivo': True}, ta, 204)
+    # No puede activarse sin equipo y un administrador ajeno no puede quedárselo.
+    pedir('PATCH', f'/usuarios/{pendiente["id"]}/estado', {'estaActivo': True}, ta, 400)
+    pedir('PATCH', f'/usuarios/{pendiente["id"]}/estado', {'estaActivo': True, 'equipoId': b}, ta, 403)
+    # El administrador de A la activa y la incorpora a su equipo.
+    pedir('PATCH', f'/usuarios/{pendiente["id"]}/estado', {'estaActivo': True, 'equipoId': a}, ta, 204)
+    assert pedir('GET', f'/usuarios/{pendiente["id"]}', token=ta)['equipoId'] == a
     tokens = login(registro['correo'])
     pedir('GET', '/directorios', token=tokens['tokenRefresco'], esperado=401)
     nuevos = pedir('POST', '/autenticacion/renovar', {'tokenRefresco': tokens['tokenRefresco']})
