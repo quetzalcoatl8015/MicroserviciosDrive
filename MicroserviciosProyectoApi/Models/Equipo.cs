@@ -6,7 +6,6 @@ public class Equipo
 {
     public long Id { get; set; }
     public string Nombre { get; set; } = null!;
-    public string CodigoRegistro { get; set; } = Guid.NewGuid().ToString("N");
     public DateTime CreadoEn { get; set; } = DateTime.UtcNow;
 }
 

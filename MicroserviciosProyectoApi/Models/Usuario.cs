@@ -26,8 +26,14 @@ public class Usuario
     public bool EsAdmin { get; set; }
 
     public int NivelAdmin { get; set; }
-    public long EquipoId { get; set; }
-    public Equipo Equipo { get; set; } = null!;
+
+    /// <summary>
+    /// Equipo al que pertenece la cuenta. Es nulo mientras la cuenta se autoregistró y
+    /// ningún administrador le ha asignado equipo; una cuenta sin equipo no puede activarse.
+    /// </summary>
+    public long? EquipoId { get; set; }
+
+    public Equipo? Equipo { get; set; }
 
     /// <summary>
     /// false al autoregistrarse: un administrador debe activar la cuenta antes de

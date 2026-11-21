@@ -58,7 +58,7 @@ public class ServicioJwt
             // El rol viaja como el texto "True"/"False" y así lo compara la política SoloAdmin.
             new(ClaimTypes.Role, usuario.EsAdmin.ToString()),
             new("nivel_admin", usuario.NivelAdmin.ToString()),
-            new("equipo_id", usuario.EquipoId.ToString()),
+            new("equipo_id", usuario.EquipoId?.ToString() ?? string.Empty),
             // Marca que distingue un token de acceso de uno de refresco.
             new("es_acceso", esAcceso.ToString()),
         };

@@ -32,8 +32,8 @@ public class ControladorAutenticacion : ControllerBase
     }
 
     /// <summary>
-    /// Autoregistro de un usuario. Queda desactivado y como usuario común hasta que
-    /// un administrador lo active.
+    /// Autoregistro de un usuario. Queda desactivado, como usuario común y sin equipo:
+    /// un administrador debe asignarle un equipo y activar la cuenta.
     /// </summary>
     [HttpPost("registro")]
     public async Task<IActionResult> Registrar(ModeloRegistro modelo)
@@ -44,9 +44,6 @@ public class ControladorAutenticacion : ControllerBase
         if (await _contexto.Usuarios.AnyAsync(u => u.Correo == modelo.Correo))
             return Conflict("Ya existe un usuario registrado con ese correo.");
 
-        var equipo = await _contexto.Equipos.FirstOrDefaultAsync(e => e.CodigoRegistro == modelo.CodigoEquipo);
-        if (equipo is null) return BadRequest("Código de equipo inválido.");
-
         var usuario = new Usuario
         {
             Nombre = modelo.Nombre,
@@ -55,7 +52,7 @@ public class ControladorAutenticacion : ControllerBase
             FechaNacimiento = modelo.FechaNacimiento!.Value,
             EsAdmin = false,
             NivelAdmin = 0,
-            EquipoId = equipo.Id,
+            EquipoId = null,
             EstaActivo = false,
         };
 
@@ -120,7 +117,7 @@ public class ControladorAutenticacion : ControllerBase
     public async Task<IActionResult> Yo()
     {
         var usuario = (Usuario)HttpContext.Items["UsuarioActual"]!;
-        var equipo = await _contexto.Equipos.Where(e => e.Id == usuario.EquipoId).Select(e => e.Nombre).SingleAsync();
+        var equipo = await _contexto.Equipos.Where(e => e.Id == usuario.EquipoId).Select(e => e.Nombre).FirstOrDefaultAsync();
         return Ok(new { usuario.Id, usuario.Nombre, usuario.Correo, usuario.EsAdmin, usuario.NivelAdmin, usuario.EquipoId, Equipo = equipo });
     }
 

@@ -15,7 +15,7 @@ public class ControladorCompartidos(ContextoProyecto contexto, AccesoEquipos acc
     public async Task<IActionResult> Obtener(long? equipoId = null)
     {
         var equipo = equipoId ?? acceso.Actual.EquipoId;
-        if (!acceso.PuedeEquipo(equipo)) return Forbid();
+        if (equipo is null || !acceso.PuedeEquipo(equipo.Value)) return Forbid();
         return Ok(await contexto.ContenidosCompartidos.AsNoTracking()
             .Where(c => c.EquipoDestinoId == equipo).OrderBy(c => c.Id).Select(c => new
             {

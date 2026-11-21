@@ -81,6 +81,9 @@ public class ModeloEditarUsuario : IValidatableObject
 public class ModeloCambiarEstadoUsuario
 {
     public bool EstaActivo { get; set; }
+
+    /// <summary>Equipo que se asigna al activar. Si no se envía, se conserva el del usuario.</summary>
+    public long? EquipoId { get; set; }
 }
 
 /// <summary>Usuario expuesto por la API (nunca incluye la contraseña).</summary>
@@ -94,7 +97,9 @@ public class UsuarioListado
     [Range(0, 2)]
     public int NivelAdmin { get; set; }
     public long? EquipoId { get; set; }
-    public string Equipo { get; set; } = null!;
+
+    /// <summary>Nombre del equipo, o null mientras la cuenta siga sin equipo asignado.</summary>
+    public string? Equipo { get; set; }
     public bool EstaActivo { get; set; }
 
     /// <summary>Indica si el usuario tiene un token de refresco asignado (sesión abierta).</summary>

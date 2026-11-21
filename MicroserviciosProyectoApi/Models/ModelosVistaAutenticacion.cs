@@ -14,14 +14,11 @@ public class CredencialesAcceso
 }
 
 /// <summary>
-/// Cuerpo del autoregistro. La cuenta queda inactiva y como usuario común hasta que
-/// un administrador la active.
+/// Cuerpo del autoregistro. La cuenta queda inactiva, como usuario común y sin equipo
+/// hasta que un administrador le asigne uno y la active.
 /// </summary>
 public class ModeloRegistro : IValidatableObject
 {
-    [Required]
-    public string CodigoEquipo { get; set; } = null!;
-
     [Required(ErrorMessage = "El nombre es obligatorio.")]
     public string Nombre { get; set; } = null!;
 

@@ -21,7 +21,9 @@ public class ControladorUsuarios(ContextoProyecto contexto, AccesoEquipos acceso
         tamanoPagina = Math.Clamp(tamanoPagina, 1, 100);
         if (equipoId.HasValue && !acceso.PuedeEquipo(equipoId.Value)) return Forbid();
         var consulta = acceso.Usuarios.AsNoTracking();
-        if (equipoId.HasValue) consulta = consulta.Where(u => u.EquipoId == equipoId);
+        // Las cuentas autoregistradas aún no tienen equipo: se listan junto a las del equipo
+        // seleccionado para que el administrador pueda asignarles uno al activarlas.
+        if (equipoId.HasValue) consulta = consulta.Where(u => u.EquipoId == equipoId.Value || u.EquipoId == null);
         if (!string.IsNullOrWhiteSpace(nombre)) consulta = consulta.Where(u => u.Nombre.Contains(nombre));
         if (!string.IsNullOrWhiteSpace(correo)) consulta = consulta.Where(u => u.Correo.Contains(correo));
         if (fechaNacimiento.HasValue) consulta = consulta.Where(u => u.FechaNacimiento == fechaNacimiento);
@@ -47,7 +49,7 @@ public class ControladorUsuarios(ContextoProyecto contexto, AccesoEquipos acceso
     {
         var equipoId = modelo.EquipoId ?? acceso.Actual.EquipoId;
         var nivel = Nivel(modelo.EsAdmin, modelo.NivelAdmin);
-        if (!acceso.PuedeEquipo(equipoId) || (!acceso.EsGlobal && nivel == 2)) return Forbid();
+        if (equipoId is null || !acceso.PuedeEquipo(equipoId.Value) || (!acceso.EsGlobal && nivel == 2)) return Forbid();
         if (!await contexto.Equipos.AnyAsync(e => e.Id == equipoId)) return BadRequest("Equipo inválido.");
         if (await contexto.Usuarios.AnyAsync(u => u.Correo == modelo.Correo)) return Conflict("El correo ya está registrado.");
         var usuario = new Usuario
@@ -70,7 +72,7 @@ public class ControladorUsuarios(ContextoProyecto contexto, AccesoEquipos acceso
         if (usuario is null) return NotFound();
         var equipoId = modelo.EquipoId ?? usuario.EquipoId;
         var nivel = Nivel(modelo.EsAdmin, modelo.NivelAdmin);
-        if (!PuedeGestionar(usuario) || !acceso.PuedeEquipo(equipoId) || (!acceso.EsGlobal && nivel == 2)) return Forbid();
+        if (!PuedeGestionar(usuario) || equipoId is null || !acceso.PuedeEquipo(equipoId.Value) || (!acceso.EsGlobal && nivel == 2)) return Forbid();
         if (id == acceso.Actual.Id && (nivel != usuario.NivelAdmin || equipoId != usuario.EquipoId))
             return BadRequest("No puedes cambiar tu propio nivel ni equipo.");
         if (usuario.NivelAdmin == 2 && nivel != 2 && await EsUltimoGlobal(usuario))
@@ -99,6 +101,16 @@ public class ControladorUsuarios(ContextoProyecto contexto, AccesoEquipos acceso
         if (!PuedeGestionar(usuario)) return Forbid();
         if (!modelo.EstaActivo && (id == acceso.Actual.Id || await EsUltimoGlobal(usuario)))
             return BadRequest("No puedes desactivarte ni desactivar al último administrador global activo.");
+        if (modelo.EstaActivo)
+        {
+            // Activar es dar acceso: la cuenta debe quedar dentro de un equipo, y solo un
+            // administrador puede decidir cuál (nivel 1 únicamente el suyo).
+            var equipoId = modelo.EquipoId ?? usuario.EquipoId;
+            if (equipoId is null) return BadRequest("Asigna un equipo antes de activar la cuenta.");
+            if (!acceso.PuedeEquipo(equipoId.Value)) return Forbid();
+            if (!await contexto.Equipos.AnyAsync(e => e.Id == equipoId.Value)) return BadRequest("Equipo inválido.");
+            usuario.EquipoId = equipoId;
+        }
         usuario.EstaActivo = modelo.EstaActivo;
         usuario.ActualizadoEn = DateTime.UtcNow;
         if (!modelo.EstaActivo && usuario.TokenSesion is not null) contexto.TokensSesion.Remove(usuario.TokenSesion);
@@ -142,7 +154,7 @@ public class ControladorUsuarios(ContextoProyecto contexto, AccesoEquipos acceso
     private static readonly Expression<Func<Usuario, UsuarioListado>> Proyeccion = u => new UsuarioListado
     {
         Id = u.Id, Nombre = u.Nombre, Correo = u.Correo, FechaNacimiento = u.FechaNacimiento,
-        EsAdmin = u.EsAdmin, NivelAdmin = u.NivelAdmin, EquipoId = u.EquipoId, Equipo = u.Equipo.Nombre,
+        EsAdmin = u.EsAdmin, NivelAdmin = u.NivelAdmin, EquipoId = u.EquipoId, Equipo = u.Equipo == null ? null : u.Equipo.Nombre,
         EstaActivo = u.EstaActivo, TieneTokenSesion = u.TokenSesion != null,
         CreadoEn = u.CreadoEn, ActualizadoEn = u.ActualizadoEn,
     };

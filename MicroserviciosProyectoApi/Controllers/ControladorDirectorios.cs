@@ -58,7 +58,7 @@ public class ControladorDirectorios : ControllerBase
         var visibles = await _acceso.DirectoriosLecturaAsync();
         if (padreId.HasValue && !await visibles.AnyAsync(d => d.Id == padreId.Value)) return NotFound();
         var equipo = equipoId ?? _acceso.Actual.EquipoId;
-        if (!padreId.HasValue && !_acceso.PuedeEquipo(equipo)) return Forbid();
+        if (!padreId.HasValue && (equipo is null || !_acceso.PuedeEquipo(equipo.Value))) return Forbid();
 
         // Se filtra por nivel. La comparación con el padre se hace en dos ramas explícitas
         // para que EF genere "IS NULL" cuando se piden los directorios de la raíz.
@@ -115,7 +115,7 @@ public class ControladorDirectorios : ControllerBase
 
         var nombre = modelo.Nombre.Trim();
         var equipoId = modelo.EquipoId ?? _acceso.Actual.EquipoId;
-        if (!_acceso.PuedeEquipo(equipoId)) return Forbid();
+        if (equipoId is null || !_acceso.PuedeEquipo(equipoId.Value)) return Forbid();
         if (modelo.PadreId.HasValue)
         {
             var padre = await _acceso.DirectoriosEscritura.FirstOrDefaultAsync(d => d.Id == modelo.PadreId);
@@ -133,13 +133,13 @@ public class ControladorDirectorios : ControllerBase
             return BadRequest("El directorio padre no existe.");
         }
 
-        if (await ExisteNombreAsync(nombre, modelo.PadreId, equipoId))
+        if (await ExisteNombreAsync(nombre, modelo.PadreId, equipoId.Value))
             return Conflict("Ya existe un directorio con ese nombre en el mismo nivel.");
 
         var directorio = new Directorio
         {
             Nombre = nombre,
-            EquipoId = equipoId,
+            EquipoId = equipoId.Value,
             PadreId = modelo.PadreId,
             PropietarioId = UsuarioActualId(),
         };

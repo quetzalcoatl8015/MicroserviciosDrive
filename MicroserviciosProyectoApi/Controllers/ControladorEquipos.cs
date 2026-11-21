@@ -19,7 +19,6 @@ public class ControladorEquipos(ContextoProyecto contexto, AccesoEquipos acceso)
         return Ok(await consulta.OrderBy(e => e.Nombre).Select(e => new
         {
             e.Id, e.Nombre,
-            CodigoRegistro = acceso.EsAdmin ? e.CodigoRegistro : null,
         }).ToListAsync());
     }
 
@@ -32,7 +31,7 @@ public class ControladorEquipos(ContextoProyecto contexto, AccesoEquipos acceso)
         var equipo = new Equipo { Nombre = nombre };
         contexto.Equipos.Add(equipo);
         await contexto.SaveChangesAsync();
-        return StatusCode(201, new { equipo.Id, equipo.Nombre, equipo.CodigoRegistro });
+        return StatusCode(201, new { equipo.Id, equipo.Nombre });
     }
 
     [HttpPut("{id:long}")]
