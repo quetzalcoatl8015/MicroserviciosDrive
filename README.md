@@ -47,7 +47,7 @@ Se mantiene la compatibilidad del campo `esAdmin`: un cliente anterior que mande
 1. Inicia sesión con un administrador de nivel 2.
 2. En **Equipos**, crea los equipos necesarios.
 3. Selecciona un equipo y abre **Usuarios** para crear usuarios normales y administradores de nivel 1. El nivel 2 puede asignar cualquier nivel.
-4. Los usuarios también pueden registrarse con el **código de equipo** que muestra su administrador. El registro siempre crea una cuenta normal e inactiva: un administrador de ese equipo debe activarla.
+4. Los usuarios también pueden autoregistrarse con sus datos personales. El registro siempre crea una cuenta normal, inactiva y **sin equipo**: un administrador debe asignarle un equipo y activarla desde **Usuarios**.
 5. En **Archivos**, crea una carpeta y ábrela para subir archivos. Los archivos conservan el límite de 10 MB y no se admiten en la raíz.
 6. Para compartir, un administrador de nivel 2 abre el equipo de origen, pulsa **Compartir** en el archivo o carpeta y elige el equipo destino.
 7. Los destinatarios acceden desde **Compartido con este equipo**. El administrador de nivel 2 puede **Revocar** desde el mismo diálogo o desde esa lista.

@@ -10,7 +10,7 @@
 
 ## Pruebas HTTP
 
-`tests/integracion.py`: **148 respuestas HTTP verificadas** en cada una de dos ejecuciones completas, incluida una instalación nueva desde cero mediante `tests/ejecutar.sh`. Comprueba:
+`tests/integracion.py`: **150 respuestas HTTP verificadas** en cada una de dos ejecuciones completas, incluida una instalación nueva desde cero mediante `tests/ejecutar.sh`. Comprueba:
 
 - Creación de equipos, usuarios normales y administradores de ambos niveles.
 - Listados de usuarios y equipos limitados al equipo permitido.
@@ -23,7 +23,7 @@
 - El contenido compartido es de lectura, sin acceso a padres ni hermanos.
 - Revocación de accesos y limpieza de concesiones al eliminar contenido.
 - Degradación de rol, cambio de equipo y desactivación efectivos con JWT emitidos previamente.
-- Registro con código de equipo, pendiente de activación y sin posibilidad de asignarse privilegios.
+- Autoregistro sin equipo, pendiente de activación por un administrador y sin posibilidad de asignarse privilegios.
 - Rotación de token de refresco, rechazo de reutilización y cierre de sesión.
 - Eliminación recursiva de carpetas y protección de cuentas con contenido.
 
@@ -34,7 +34,8 @@
 - IDs, contraseñas, sesión, jerarquía y referencia física del archivo conservados.
 - Todos los usuarios y carpetas asignados al Equipo principal.
 - Usuario normal con nivel 0, administrador más antiguo activo con nivel 2 y segundo administrador con nivel 1.
-- Registro correcto de ambas migraciones en el historial.
+- Retiro del código de equipo y pertenencia opcional (cuentas sin equipo).
+- Registro correcto de las tres migraciones en el historial.
 
 La base temporal se elimina al finalizar. No se modifica una instalación anterior del usuario.
 
