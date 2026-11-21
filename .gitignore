@@ -16,3 +16,8 @@ backreport/
 # Configuración local y artefactos de pruebas.
 .env
 **/__pycache__/
+
+# Pruebas locales y documento de validación. Se conservan en el equipo de quien
+# desarrolla, pero no forman parte del entregable que se publica en GitHub.
+tests/
+VALIDACION.md
