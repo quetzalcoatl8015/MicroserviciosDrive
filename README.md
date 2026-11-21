@@ -97,7 +97,7 @@ Abre `http://localhost:5173`. Vite reenvía `/api` a `http://localhost:5239`. Pa
 ## Rutas añadidas
 
 - `GET /api/autenticacion/yo`: identidad y permisos actuales.
-- `GET /api/equipos`: solo el equipo propio; nivel 2 obtiene todos. El código de registro solo se devuelve a administradores.
+- `GET /api/equipos`: solo el equipo propio; nivel 2 obtiene todos.
 - `POST /api/equipos`, `PUT /api/equipos/{id}`: crear y renombrar; solo nivel 2.
 - `GET /api/compartidos?equipoId=...`: contenido recibido por un equipo.
 - `POST /api/compartidos`: `{ "equipoDestinoId": 2, "directorioId": 10 }` o `{ "equipoDestinoId": 2, "archivoId": 15 }`; solo nivel 2.
