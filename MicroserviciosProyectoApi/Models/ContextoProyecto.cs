@@ -45,6 +45,9 @@ public class ContextoProyecto : DbContext
             entity.Property(u => u.Correo).HasMaxLength(255).IsRequired();
             entity.Property(u => u.Contrasena).HasMaxLength(255).IsRequired();
 
+            // Sello de la sesión: es un GUID, así que siempre ocupa 36 caracteres.
+            entity.Property(u => u.SelloSesion).HasMaxLength(36).IsRequired();
+
             // El proveedor MySql.EntityFrameworkCore devuelve la columna DATE como DateTime,
             // y al materializar el usuario intenta convertirla a DateOnly y falla en tiempo
             // de ejecución. Con este convertidor se le indica cómo pasar de una a otra:

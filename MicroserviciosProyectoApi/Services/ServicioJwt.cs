@@ -59,6 +59,10 @@ public class ServicioJwt
             new(ClaimTypes.Role, usuario.EsAdmin.ToString()),
             new("nivel_admin", usuario.NivelAdmin.ToString()),
             new("equipo_id", usuario.EquipoId?.ToString() ?? string.Empty),
+            // Sello de la sesión vigente. Si un administrador activa o desactiva la cuenta, el
+            // sello cambia en la base de datos y este claim deja de coincidir, por lo que el
+            // token se rechaza aunque todavía no haya expirado.
+            new("sello_sesion", usuario.SelloSesion),
             // Marca que distingue un token de acceso de uno de refresco.
             new("es_acceso", esAcceso.ToString()),
         };

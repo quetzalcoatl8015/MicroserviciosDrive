@@ -241,6 +241,11 @@ namespace Proyecto.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("varchar(100)");
 
+                    b.Property<string>("SelloSesion")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Correo")

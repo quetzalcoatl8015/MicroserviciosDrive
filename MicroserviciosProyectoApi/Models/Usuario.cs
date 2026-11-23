@@ -47,6 +47,14 @@ public class Usuario
     /// <summary>Momento de la última modificación.</summary>
     public DateTime ActualizadoEn { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// Sello de la sesión. Viaja dentro de los dos tokens y se compara con esta columna en
+    /// cada petición. Al activar o desactivar una cuenta se guarda un sello nuevo, de modo que
+    /// todos los tokens emitidos antes de ese cambio dejan de coincidir y la persona debe
+    /// volver a iniciar sesión.
+    /// </summary>
+    public string SelloSesion { get; set; } = Guid.NewGuid().ToString();
+
     /// <summary>Cada usuario puede tener cuando mucho un token de sesión asignado.</summary>
     public TokenSesion? TokenSesion { get; set; }
 }

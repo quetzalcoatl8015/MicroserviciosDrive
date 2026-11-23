@@ -78,6 +78,15 @@ constructor.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     contexto.Fail("El usuario está desactivado.");
                     return;
                 }
+                // El sello de la sesión debe coincidir con el de la base de datos. Activar o
+                // desactivar una cuenta guarda un sello nuevo, así que los tokens emitidos antes
+                // de ese cambio se rechazan aquí aunque todavía no hayan expirado.
+                if (identidad.FindFirst("sello_sesion")?.Value != usuario.SelloSesion)
+                {
+                    contexto.Fail("La sesión fue revocada.");
+                    return;
+                }
+
                 // Los permisos se vuelven a leer: degradar o cambiar de equipo tiene efecto inmediato.
                 var claims = (ClaimsIdentity)identidad.Identity!;
                 foreach (var claim in claims.FindAll(ClaimTypes.Role).ToList()) claims.RemoveClaim(claim);

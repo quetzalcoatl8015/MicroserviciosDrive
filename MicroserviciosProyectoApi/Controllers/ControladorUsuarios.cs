@@ -111,9 +111,16 @@ public class ControladorUsuarios(ContextoProyecto contexto, AccesoEquipos acceso
             if (!await contexto.Equipos.AnyAsync(e => e.Id == equipoId.Value)) return BadRequest("Equipo inválido.");
             usuario.EquipoId = equipoId;
         }
+        if (usuario.EstaActivo != modelo.EstaActivo)
+        {
+            // Activar y desactivar son cambios de acceso: se guarda un sello de sesión nuevo
+            // (que invalida los tokens ya emitidos) y se descarta el token de refresco guardado,
+            // de modo que la persona deba volver a iniciar sesión.
+            usuario.SelloSesion = Guid.NewGuid().ToString();
+            if (usuario.TokenSesion is not null) contexto.TokensSesion.Remove(usuario.TokenSesion);
+        }
         usuario.EstaActivo = modelo.EstaActivo;
         usuario.ActualizadoEn = DateTime.UtcNow;
-        if (!modelo.EstaActivo && usuario.TokenSesion is not null) contexto.TokensSesion.Remove(usuario.TokenSesion);
         await contexto.SaveChangesAsync();
         return NoContent();
     }
