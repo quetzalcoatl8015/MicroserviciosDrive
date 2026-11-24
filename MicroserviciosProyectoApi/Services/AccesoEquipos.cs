@@ -4,7 +4,6 @@ using Proyecto.Models;
 
 namespace Proyecto.Services;
 
-/// <summary>Autorización central. Compartir concede lectura; nunca escritura ni acceso a los padres.</summary>
 public class AccesoEquipos(ContextoProyecto contexto, IHttpContextAccessor http)
 {
     public Usuario Actual => (Usuario)http.HttpContext!.Items["UsuarioActual"]!;
@@ -12,8 +11,6 @@ public class AccesoEquipos(ContextoProyecto contexto, IHttpContextAccessor http)
     public bool EsAdmin => Actual.EsAdmin;
     public bool PuedeEquipo(long equipoId) => EsGlobal || equipoId == Actual.EquipoId;
 
-    // Las cuentas autoregistradas todavía no tienen equipo: se incluyen para que cualquier
-    // administrador pueda verlas y asignarles uno al activarlas.
     public IQueryable<Usuario> Usuarios => EsGlobal ? contexto.Usuarios
         : contexto.Usuarios.Where(u => u.EquipoId == Actual.EquipoId || u.EquipoId == null);
     public IQueryable<Directorio> DirectoriosEscritura => EsGlobal ? contexto.Directorios
@@ -21,7 +18,6 @@ public class AccesoEquipos(ContextoProyecto contexto, IHttpContextAccessor http)
     public IQueryable<Archivo> ArchivosEscritura => EsGlobal ? contexto.Archivos
         : contexto.Archivos.Where(a => a.Directorio.EquipoId == Actual.EquipoId);
 
-    // Se calcula una vez por petición. La expansión solo sigue descendientes de carpetas compartidas.
     private List<long>? _directoriosCompartidos;
     private async Task<List<long>> DirectoriosCompartidosAsync()
     {

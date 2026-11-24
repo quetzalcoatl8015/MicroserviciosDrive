@@ -5,10 +5,6 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <!-- CS1591: el compilador avisa cuando un miembro público no tiene comentario XML.
-         Como la generación del archivo XML de documentación se mantiene, se silencia esa
-         advertencia para no marcar como problema cada propiedad de los modelos y DTO
-         (Id, fechas, navegaciones), que son autoexplicativas y no necesitan un summary vacío. -->
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 

@@ -7,38 +7,21 @@ using Proyecto.Models;
 using Proyecto.Services;
 using Scalar.AspNetCore;
 
-// Punto de entrada de la API. Aquí se registran los servicios y se arma la tubería
-// (middleware) por la que pasan todas las peticiones. Todo el archivo está en español
-// igual que el resto del backend.
 var constructor = WebApplication.CreateBuilder(args);
 
-// ---------------------------------------------------------------------------
-// Servicios de la aplicación
-// ---------------------------------------------------------------------------
-
-// Documentación OpenAPI y su interfaz gráfica de prueba (Scalar), solo en desarrollo.
 constructor.Services.AddOpenApi();
 constructor.Services.AddControllers();
 constructor.Services.AddHttpContextAccessor();
 constructor.Services.AddScoped<AccesoEquipos>();
 
-// Base de datos MySQL a través de EF Core. La cadena de conexión se lee de la configuración
-// con la clave "ConnectionStrings:ConexionPrincipal". Si no existe, se aborta el arranque con
-// un mensaje claro en lugar de dejar que más adelante falle con un valor nulo.
 var cadenaConexion = constructor.Configuration.GetConnectionString("ConexionPrincipal")
     ?? throw new InvalidOperationException("Falta la cadena de conexión 'ConexionPrincipal' en la configuración.");
 constructor.Services.AddDbContext<ContextoProyecto>(opciones => opciones.UseMySQL(cadenaConexion));
 
-// Servicio que firma los JWT (tokens de acceso y de refresco).
 constructor.Services.AddSingleton<ServicioJwt>();
 
-// Almacenamiento físico de los archivos subidos. Se registra como singleton porque solo
-// resuelve la ruta raíz una vez y no mantiene estado por petición.
 constructor.Services.AddSingleton<ServicioAlmacenamiento>();
 
-// ---------------------------------------------------------------------------
-// Autenticación con JWT
-// ---------------------------------------------------------------------------
 constructor.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opciones =>
     {
@@ -59,8 +42,6 @@ constructor.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             {
                 var identidad = contexto.Principal;
 
-                // Únicamente los tokens de acceso sirven para autenticar peticiones: un token
-                // de refresco (cuyo claim "es_acceso" es "False") se rechaza aquí.
                 if (identidad == null
                     || identidad.FindFirst("es_acceso")?.Value != "True"
                     || !long.TryParse(identidad.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
@@ -69,7 +50,6 @@ constructor.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     return;
                 }
 
-                // Un usuario desactivado pierde el acceso de inmediato aunque su token siga vigente.
                 var baseDatos = contexto.HttpContext.RequestServices.GetRequiredService<ContextoProyecto>();
 
                 var usuario = await baseDatos.Usuarios.AsNoTracking().FirstOrDefaultAsync(u => u.Id == usuarioId && u.EstaActivo);
@@ -78,16 +58,13 @@ constructor.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     contexto.Fail("El usuario está desactivado.");
                     return;
                 }
-                // El sello de la sesión debe coincidir con el de la base de datos. Activar o
-                // desactivar una cuenta guarda un sello nuevo, así que los tokens emitidos antes
-                // de ese cambio se rechazan aquí aunque todavía no hayan expirado.
+
                 if (identidad.FindFirst("sello_sesion")?.Value != usuario.SelloSesion)
                 {
                     contexto.Fail("La sesión fue revocada.");
                     return;
                 }
 
-                // Los permisos se vuelven a leer: degradar o cambiar de equipo tiene efecto inmediato.
                 var claims = (ClaimsIdentity)identidad.Identity!;
                 foreach (var claim in claims.FindAll(ClaimTypes.Role).ToList()) claims.RemoveClaim(claim);
                 claims.AddClaim(new Claim(ClaimTypes.Role, usuario.EsAdmin.ToString()));
@@ -100,16 +77,12 @@ constructor.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// Política de autorización para el módulo de usuarios: solo administradores.
-// El rol viaja en el claim como el texto "True"/"False".
 constructor.Services.AddAuthorization(opciones =>
 {
     opciones.AddPolicy("SoloAdmin", politica => politica.RequireClaim(ClaimTypes.Role, "True"));
     opciones.AddPolicy("AdminGlobal", politica => politica.RequireClaim(ClaimTypes.Role, "True").RequireClaim("nivel_admin", "2"));
 });
 
-// CORS: permite que la interfaz React pueda llamar a la API desde su
-// servidor de desarrollo.
 var nombrePoliticaCors = "_permitirOrigenApp";
 constructor.Services.AddCors(opciones =>
 {
@@ -125,9 +98,6 @@ constructor.Services.AddCors(opciones =>
 
 var aplicacion = constructor.Build();
 
-// ---------------------------------------------------------------------------
-// Tubería de peticiones
-// ---------------------------------------------------------------------------
 if (aplicacion.Environment.IsDevelopment())
 {
     aplicacion.MapOpenApi();
@@ -139,10 +109,6 @@ aplicacion.UseAuthentication();
 aplicacion.UseAuthorization();
 aplicacion.MapControllers();
 
-// Preparación de la base de datos antes de atender peticiones: aplica las migraciones
-// pendientes y siembra el administrador inicial la primera vez (ver SembradoBaseDatos).
-// Se abre un ámbito propio porque los servicios con ámbito (el DbContext) no se pueden
-// resolver directamente desde la raíz del contenedor.
 using (var ambito = aplicacion.Services.CreateScope())
 {
     var contexto = ambito.ServiceProvider.GetRequiredService<ContextoProyecto>();

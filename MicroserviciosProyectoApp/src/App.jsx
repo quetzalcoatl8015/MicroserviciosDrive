@@ -26,8 +26,6 @@ export default function App() {
   }, [informar]);
   useEffect(() => {
     if (localStorage.getItem('access_token')) {
-      // La lectura de sesión sincroniza el estado con la API al montar la aplicación.
-      // oxlint-disable-next-line react/set-state-in-effect
       cargar();
     }
     const cerrar = () => setUsuario(null);
@@ -35,7 +33,7 @@ export default function App() {
     return () => window.removeEventListener('sesion-cerrada', cerrar);
   }, [cargar]);
   async function salir() {
-    try { await api.post('/autenticacion/cerrar-sesion'); } catch { /* Limpia también una sesión vencida. */ }
+    try { await api.post('/autenticacion/cerrar-sesion'); } catch { }
     localStorage.removeItem('access_token'); localStorage.removeItem('refresh_token'); setUsuario(null);
   }
   async function crearEquipo(event) {

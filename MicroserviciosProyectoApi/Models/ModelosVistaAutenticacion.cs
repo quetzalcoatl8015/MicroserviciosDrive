@@ -2,7 +2,6 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Proyecto.Models;
 
-/// <summary>Cuerpo del inicio de sesión.</summary>
 public class CredencialesAcceso
 {
     [Required(ErrorMessage = "El correo es obligatorio.")]
@@ -13,10 +12,6 @@ public class CredencialesAcceso
     public string Contrasena { get; set; } = null!;
 }
 
-/// <summary>
-/// Cuerpo del autoregistro. La cuenta queda inactiva, como usuario común y sin equipo
-/// hasta que un administrador le asigne uno y la active.
-/// </summary>
 public class ModeloRegistro : IValidatableObject
 {
     [Required(ErrorMessage = "El nombre es obligatorio.")]
@@ -35,7 +30,6 @@ public class ModeloRegistro : IValidatableObject
     [Required(ErrorMessage = "La fecha de nacimiento es obligatoria.")]
     public DateOnly? FechaNacimiento { get; set; }
 
-    /// <summary>Validación cruzada: las dos contraseñas deben coincidir.</summary>
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         if (Contrasena != ConfirmarContrasena)
@@ -43,12 +37,10 @@ public class ModeloRegistro : IValidatableObject
     }
 }
 
-/// <summary>Cuerpo de la renovación de sesión: solo lleva el token de refresco.</summary>
 public class SolicitudTokenRefresco
 {
     [Required(ErrorMessage = "El token de refresco es obligatorio.")]
     public string TokenRefresco { get; set; } = null!;
 }
 
-/// <summary>Par de tokens entregado al cliente tras iniciar sesión o renovar la sesión.</summary>
 public record TokensAcceso(string TokenAcceso, string TokenRefresco);

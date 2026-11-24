@@ -9,15 +9,6 @@ using Proyecto.Services;
 
 namespace Proyecto.Controllers;
 
-/// <summary>
-/// Módulo de autenticación (módulo 1 del PDF): registro, inicio de sesión,
-/// renovación de la sesión y cierre de sesión.
-/// </summary>
-/// <remarks>
-/// La ruta base se declara explícitamente en español (<c>api/autenticacion</c>) en lugar
-/// de usar la plantilla <c>api/[controller]</c>, porque esa plantilla generaría una ruta
-/// con el nombre de la clase y quedaría mezclada con inglés.
-/// </remarks>
 [Route("api/autenticacion")]
 [ApiController]
 public class ControladorAutenticacion : ControllerBase
@@ -31,10 +22,6 @@ public class ControladorAutenticacion : ControllerBase
         _servicioJwt = servicioJwt;
     }
 
-    /// <summary>
-    /// Autoregistro de un usuario. Queda desactivado, como usuario común y sin equipo:
-    /// un administrador debe asignarle un equipo y activar la cuenta.
-    /// </summary>
     [HttpPost("registro")]
     public async Task<IActionResult> Registrar(ModeloRegistro modelo)
     {
@@ -68,9 +55,6 @@ public class ControladorAutenticacion : ControllerBase
         });
     }
 
-    /// <summary>
-    /// Inicia sesión y entrega un par de tokens (de acceso y de refresco).
-    /// </summary>
     [HttpPost("iniciar-sesion")]
     public async Task<IActionResult> IniciarSesion(CredencialesAcceso credenciales)
     {
@@ -79,7 +63,6 @@ public class ControladorAutenticacion : ControllerBase
 
         var usuario = await _contexto.Usuarios.FirstOrDefaultAsync(u => u.Correo == credenciales.Correo);
 
-        // BCrypt.Verify compara la contraseña recibida contra el hash guardado.
         if (usuario is null || !BCrypt.Net.BCrypt.Verify(credenciales.Contrasena, usuario.Contrasena))
             return Unauthorized("Credenciales inválidas.");
 
@@ -89,17 +72,12 @@ public class ControladorAutenticacion : ControllerBase
         return Ok(await EmitirTokensAsync(usuario));
     }
 
-    /// <summary>
-    /// Obtiene un nuevo par de tokens a partir de un token de refresco vigente.
-    /// El token de refresco anterior queda invalidado (rotación obligatoria).
-    /// </summary>
     [HttpPost("renovar")]
     public async Task<IActionResult> Renovar(SolicitudTokenRefresco solicitud)
     {
         if (!ModelState.IsValid)
             return ValidationProblem(ModelState);
 
-        // En la base sólo vive el hash del token, así que se busca por su hash.
         var hashToken = CalcularHashToken(solicitud.TokenRefresco);
 
         var guardado = await _contexto.TokensSesion
@@ -121,9 +99,6 @@ public class ControladorAutenticacion : ControllerBase
         return Ok(new { usuario.Id, usuario.Nombre, usuario.Correo, usuario.EsAdmin, usuario.NivelAdmin, usuario.EquipoId, Equipo = equipo });
     }
 
-    /// <summary>
-    /// Cierra la sesión del usuario autenticado revocando su token de refresco.
-    /// </summary>
     [HttpPost("cerrar-sesion")]
     [Authorize]
     public async Task<IActionResult> CerrarSesion()
@@ -142,17 +117,11 @@ public class ControladorAutenticacion : ControllerBase
         return NoContent();
     }
 
-    /// <summary>
-    /// Emite un nuevo par de tokens y deja asignado el token de refresco al usuario,
-    /// invalidando el que tuviera antes.
-    /// </summary>
     private async Task<TokensAcceso> EmitirTokensAsync(Usuario usuario)
     {
         var tokenRefresco = _servicioJwt.CrearTokenRefresco(usuario);
         var expiraEn = DateTime.UtcNow.AddMinutes(_servicioJwt.MinutosTokenRefresco);
 
-        // Se guarda el hash, no el token. Si alguien leyera la tabla no podría
-        // reutilizar el token de refresco, y la columna queda de tamaño fijo.
         var hashToken = CalcularHashToken(tokenRefresco);
 
         var guardado = await _contexto.TokensSesion.FirstOrDefaultAsync(t => t.UsuarioId == usuario.Id);
@@ -178,11 +147,6 @@ public class ControladorAutenticacion : ControllerBase
         return new TokensAcceso(_servicioJwt.CrearTokenAcceso(usuario), tokenRefresco);
     }
 
-    /// <summary>
-    /// Calcula el hash SHA-256 (en hexadecimal) de un token de refresco.
-    /// Se usa para no guardar el token en claro: la base almacena 64 caracteres
-    /// fijos en lugar del JWT completo, que puede superar los 512 caracteres.
-    /// </summary>
     private static string CalcularHashToken(string token)
         => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 }

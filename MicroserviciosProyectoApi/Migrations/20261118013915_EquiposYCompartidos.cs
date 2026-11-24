@@ -6,13 +6,13 @@ using MySql.EntityFrameworkCore.Metadata;
 
 namespace Proyecto.Migrations
 {
-    /// <inheritdoc />
+
     public partial class EquiposYCompartidos : Migration
     {
-        /// <inheritdoc />
+
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // MySQL exige conservar un índice que empiece por PadreId para la FK del árbol.
+
             migrationBuilder.CreateIndex(
                 name: "IX_Directorios_PadreId",
                 table: "Directorios",
@@ -140,11 +140,10 @@ namespace Proyecto.Migrations
                 column: "Nombre",
                 unique: true);
 
-            // Conserva usuarios, árbol y referencias a los archivos existentes.
             migrationBuilder.Sql("INSERT INTO Equipos (Id, Nombre, CodigoRegistro, CreadoEn) VALUES (1, 'Equipo principal', REPLACE(UUID(), '-', ''), UTC_TIMESTAMP(6));");
             migrationBuilder.Sql("UPDATE Usuarios SET EquipoId = 1, NivelAdmin = CASE WHEN EsAdmin = 1 THEN 1 ELSE 0 END;");
             migrationBuilder.Sql("UPDATE Directorios SET EquipoId = 1;");
-            // Solo el administrador activo más antiguo pasa a nivel 2.
+
             migrationBuilder.Sql("UPDATE Usuarios u JOIN (SELECT MIN(Id) AS Id FROM Usuarios WHERE EsAdmin = 1 AND EstaActivo = 1) primero ON primero.Id = u.Id SET u.NivelAdmin = 2;");
 
             migrationBuilder.AddForeignKey(
@@ -164,7 +163,6 @@ namespace Proyecto.Migrations
                 onDelete: ReferentialAction.Restrict);
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(
@@ -210,8 +208,6 @@ namespace Proyecto.Migrations
             migrationBuilder.DropColumn(
                 name: "EquipoId",
                 table: "Directorios");
-
-
         }
     }
 }

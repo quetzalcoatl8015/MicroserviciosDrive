@@ -21,8 +21,7 @@ public class ControladorUsuarios(ContextoProyecto contexto, AccesoEquipos acceso
         tamanoPagina = Math.Clamp(tamanoPagina, 1, 100);
         if (equipoId.HasValue && !acceso.PuedeEquipo(equipoId.Value)) return Forbid();
         var consulta = acceso.Usuarios.AsNoTracking();
-        // Las cuentas autoregistradas aún no tienen equipo: se listan junto a las del equipo
-        // seleccionado para que el administrador pueda asignarles uno al activarlas.
+
         if (equipoId.HasValue) consulta = consulta.Where(u => u.EquipoId == equipoId.Value || u.EquipoId == null);
         if (!string.IsNullOrWhiteSpace(nombre)) consulta = consulta.Where(u => u.Nombre.Contains(nombre));
         if (!string.IsNullOrWhiteSpace(correo)) consulta = consulta.Where(u => u.Correo.Contains(correo));
@@ -103,8 +102,7 @@ public class ControladorUsuarios(ContextoProyecto contexto, AccesoEquipos acceso
             return BadRequest("No puedes desactivarte ni desactivar al último administrador global activo.");
         if (modelo.EstaActivo)
         {
-            // Activar es dar acceso: la cuenta debe quedar dentro de un equipo, y solo un
-            // administrador puede decidir cuál (nivel 1 únicamente el suyo).
+
             var equipoId = modelo.EquipoId ?? usuario.EquipoId;
             if (equipoId is null) return BadRequest("Asigna un equipo antes de activar la cuenta.");
             if (!acceso.PuedeEquipo(equipoId.Value)) return Forbid();
@@ -113,9 +111,7 @@ public class ControladorUsuarios(ContextoProyecto contexto, AccesoEquipos acceso
         }
         if (usuario.EstaActivo != modelo.EstaActivo)
         {
-            // Activar y desactivar son cambios de acceso: se guarda un sello de sesión nuevo
-            // (que invalida los tokens ya emitidos) y se descarta el token de refresco guardado,
-            // de modo que la persona deba volver a iniciar sesión.
+
             usuario.SelloSesion = Guid.NewGuid().ToString();
             if (usuario.TokenSesion is not null) contexto.TokensSesion.Remove(usuario.TokenSesion);
         }
@@ -145,7 +141,7 @@ public class ControladorUsuarios(ContextoProyecto contexto, AccesoEquipos acceso
         if (usuario is null) return NotFound();
         if (!PuedeGestionar(usuario)) return Forbid();
         if (id == acceso.Actual.Id || await EsUltimoGlobal(usuario)) return BadRequest("No puedes eliminarte ni eliminar al último administrador global activo.");
-        // Eliminar una cuenta no debe borrar carpetas que contienen trabajo de otros usuarios.
+
         if (await contexto.Directorios.AnyAsync(d => d.PropietarioId == id) || await contexto.Archivos.AnyAsync(a => a.PropietarioId == id))
             return Conflict("El usuario tiene contenido. Desactívalo o elimina primero su contenido.");
         contexto.Usuarios.Remove(usuario);

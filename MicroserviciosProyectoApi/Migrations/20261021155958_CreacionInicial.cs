@@ -6,39 +6,16 @@ using MySql.EntityFrameworkCore.Metadata;
 
 namespace Proyecto.Migrations
 {
-    /// <summary>
-    /// Migración inicial del repositorio de archivos (nombre interno: CreacionInicial).
-    ///
-    /// El nombre del archivo lleva el prefijo 20261021155958 porque es una marca de tiempo
-    /// (año mes día hora minuto segundo, en UTC) que Entity Framework Core genera de forma
-    /// obligatoria. Ese número es lo que le dice a EF en qué orden debe aplicar las
-    /// migraciones; si se quitara, EF no podría ordenarlas y el esquema podría quedar
-    /// inconsistente. Lo que sí se tradujo al español fue el nombre descriptivo
-    /// ("CreacionInicial") y todo el contenido.
-    ///
-    /// Crea el esquema completo de la base de datos "ProyectoM":
-    ///   - Usuarios      : cuentas de usuario (módulo 2).
-    ///   - TokensSesion  : un token de refresco vigente por usuario (módulo 2).
-    ///   - Directorios   : árbol de directorios (módulo 3.1).
-    ///   - Archivos      : archivos subidos, sólo dentro de un directorio (módulo 3.2).
-    ///
-    /// El orden de creación respeta las dependencias: primero las tablas que no
-    /// dependen de nadie (Usuarios), luego las que dependen de ellas.
-    /// </summary>
+
     public partial class CreacionInicial : Migration
     {
-        /// <inheritdoc />
+
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // Fija utf8mb4 como charset de la base para admitir acentos, emojis, etc.
+
             migrationBuilder.AlterDatabase()
                 .Annotation("MySQL:Charset", "utf8mb4");
 
-            // ------------------------------------------------------------------
-            // Tabla Usuarios: cuentas del sistema. No depende de ninguna otra tabla.
-            // Contrasena guarda el hash BCrypt (nunca la contraseña en claro).
-            // EstaActivo = false por defecto al registrarse; un administrador lo activa.
-            // ------------------------------------------------------------------
             migrationBuilder.CreateTable(
                 name: "Usuarios",
                 columns: table => new
@@ -60,16 +37,6 @@ namespace Proyecto.Migrations
                 })
                 .Annotation("MySQL:Charset", "utf8mb4");
 
-            // ------------------------------------------------------------------
-            // Tabla Directorios: cada fila es un directorio del repositorio.
-            // PadreId = NULL significa que es un directorio raíz (nivel superior).
-            // Dos llaves foráneas:
-            //   - PadreId -> Directorios.Id : arma el árbol. Se usa Restrict (no Cascade)
-            //     porque MySQL no admite el borrado en cascada sobre una llave foránea que
-            //     se apunta a sí misma; el borrado del subárbol se hace en el controlador.
-            //   - PropietarioId -> Usuarios.Id : creador; si se borra el usuario, sus
-            //     directorios se eliminan en cascada.
-            // ------------------------------------------------------------------
             migrationBuilder.CreateTable(
                 name: "Directorios",
                 columns: table => new
@@ -100,14 +67,6 @@ namespace Proyecto.Migrations
                 })
                 .Annotation("MySQL:Charset", "utf8mb4");
 
-            // ------------------------------------------------------------------
-            // Tabla TokensSesion: guarda el hash SHA-256 del token de refresco vigente
-            // de cada usuario (nunca el token en claro, por seguridad y porque el JWT
-            // completo supera el tamaño razonable de una columna).
-            // La llave foránea UsuarioId es única, de modo que un usuario sólo puede
-            // tener un token de refresco activo a la vez (rotación en cada inicio de
-            // sesión y en cada renovación).
-            // ------------------------------------------------------------------
             migrationBuilder.CreateTable(
                 name: "TokensSesion",
                 columns: table => new
@@ -131,16 +90,6 @@ namespace Proyecto.Migrations
                 })
                 .Annotation("MySQL:Charset", "utf8mb4");
 
-            // ------------------------------------------------------------------
-            // Tabla Archivos: archivos del repositorio. Siempre pertenecen a un
-            // directorio (DirectorioId obligatorio, no puede haber archivos sueltos).
-            //   - Nombre               : nombre visible SIN extensión (permite renombrar
-            //                            sin cambiar el tipo de archivo, requisito 3.4).
-            //   - Extension            : extensión con el punto (".pdf", ".jpg", ...).
-            //   - NombreAlmacenamiento : nombre físico real en disco (GUID + extensión),
-            //                            único, para que dos archivos con el mismo nombre
-            //                            no colisionen.
-            // ------------------------------------------------------------------
             migrationBuilder.CreateTable(
                 name: "Archivos",
                 columns: table => new
@@ -175,13 +124,11 @@ namespace Proyecto.Migrations
                 })
                 .Annotation("MySQL:Charset", "utf8mb4");
 
-            // Índice que acelera listar los archivos de un directorio por nombre.
             migrationBuilder.CreateIndex(
                 name: "IX_Archivos_DirectorioId_Nombre",
                 table: "Archivos",
                 columns: new[] { "DirectorioId", "Nombre" });
 
-            // El nombre físico (GUID) es único por diseño.
             migrationBuilder.CreateIndex(
                 name: "IX_Archivos_NombreAlmacenamiento",
                 table: "Archivos",
@@ -193,11 +140,6 @@ namespace Proyecto.Migrations
                 table: "Archivos",
                 column: "PropietarioId");
 
-            // Unicidad de nombre por nivel: no puede haber dos directorios con el
-            // mismo nombre dentro del mismo padre (requisito 3.1). Ojo: en MySQL
-            // los NULL se consideran distintos entre sí, así que este índice no
-            // cubre el caso de la raíz (PadreId NULL); ese caso se valida en el
-            // controlador antes de insertar.
             migrationBuilder.CreateIndex(
                 name: "IX_Directorios_PadreId_Nombre",
                 table: "Directorios",
@@ -215,14 +157,12 @@ namespace Proyecto.Migrations
                 column: "Token",
                 unique: true);
 
-            // Un token de refresco por usuario (índice único).
             migrationBuilder.CreateIndex(
                 name: "IX_TokensSesion_UsuarioId",
                 table: "TokensSesion",
                 column: "UsuarioId",
                 unique: true);
 
-            // Un correo por usuario (índice único).
             migrationBuilder.CreateIndex(
                 name: "IX_Usuarios_Correo",
                 table: "Usuarios",
@@ -230,10 +170,6 @@ namespace Proyecto.Migrations
                 unique: true);
         }
 
-        /// <summary>
-        /// Revierte la migración. Se eliminan primero las tablas que dependen de
-        /// otras (Archivos y Directorios) y al final Usuarios, respetando las llaves foráneas.
-        /// </summary>
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(

@@ -4,10 +4,10 @@
 
 namespace Proyecto.Migrations
 {
-    /// <inheritdoc />
+
     public partial class AutoregistroSinCodigoDeEquipo : Migration
     {
-        /// <inheritdoc />
+
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropIndex(
@@ -27,7 +27,6 @@ namespace Proyecto.Migrations
                 oldType: "bigint");
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AlterColumn<long>(
